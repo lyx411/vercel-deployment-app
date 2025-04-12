@@ -9,7 +9,7 @@
       "src": "package.json",
       "use": "@vercel/static-build",
       "config": {
-        "distDir": "dist"
+        "distDir": "dist/public"
       }
     }
   ],
@@ -19,7 +19,8 @@
       "dest": "server/index.ts"
     },
     {
-      "handle": "filesystem"
+      "src": "/(.*\\.(js|css|png|jpg|gif|svg|ico|json))",
+      "dest": "/dist/public/$1"
     },
     {
       "src": "/(.*)",
