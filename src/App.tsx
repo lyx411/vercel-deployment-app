@@ -1,13 +1,36 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import { ThemeProvider, CssBaseline } from '@mui/material'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { ThemeProvider, createTheme, CssBaseline } from '@mui/material'
 import { LanguageProvider } from './contexts/LanguageContext'
-import { theme } from './theme'
-
-// 页面组件
-import HomePage from './pages/HomePage'
-import LanguageSelectionPage from './pages/LanguageSelectionPage'
+import LanguagePage from './pages/LanguagePage'
 import ChatPage from './pages/ChatPage'
-import NotFoundPage from './pages/NotFoundPage'
+
+const theme = createTheme({
+  palette: {
+    primary: {
+      main: '#2563eb',
+    },
+    secondary: {
+      main: '#10b981',
+    },
+    background: {
+      default: '#f3f4f6',
+      paper: '#ffffff',
+    },
+  },
+  typography: {
+    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+  },
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          textTransform: 'none',
+          borderRadius: 8,
+        },
+      },
+    },
+  },
+})
 
 function App() {
   return (
@@ -16,10 +39,9 @@ function App() {
       <LanguageProvider>
         <BrowserRouter>
           <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/language" element={<LanguageSelectionPage />} />
+            <Route path="/language" element={<LanguagePage />} />
             <Route path="/chat" element={<ChatPage />} />
-            <Route path="*" element={<NotFoundPage />} />
+            <Route path="*" element={<Navigate to="/language" replace />} />
           </Routes>
         </BrowserRouter>
       </LanguageProvider>
