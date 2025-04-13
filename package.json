@@ -1,15 +1,27 @@
 {
-  "name": "qr-code-generator",
-  "version": "1.0.0",
-  "description": "一个简单的QR码生成器",
-  "main": "index.html",
-  "scripts": {
-    "start": "serve"
-  },
+  "name": "qrtochat-web",
+  "version": "0.1.0",
+  "private": true,
   "dependencies": {
-    "serve": "^14.0.1"
+    "@emotion/react": "^11.11.4",
+    "@emotion/styled": "^11.11.0",
+    "@mui/icons-material": "^5.15.11",
+    "@mui/material": "^5.15.11",
+    "date-fns": "^3.3.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.22.2",
+    "typescript": "^5.3.3"
   },
-  "devDependencies": {},
-  "author": "",
-  "license": "MIT"
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "serve": "vite preview"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.64",
+    "@types/react-dom": "^18.2.21",
+    "@vitejs/plugin-react": "^4.2.1",
+    "vite": "^5.1.5"
+  }
 }
