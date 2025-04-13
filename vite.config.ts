@@ -1,13 +1,14 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-// 修正导入方式
-import shadcnPlugin from '@replit/vite-plugin-shadcn-theme-json';
+// 注释掉这个插件以避免构建错误
+// import shadcnPlugin from '@replit/vite-plugin-shadcn-theme-json';
 
 export default defineConfig({
   plugins: [
     react(),
-    shadcnPlugin(),
+    // 暂时禁用该插件以解决构建错误
+    // shadcnPlugin(),
   ],
   resolve: {
     alias: {
