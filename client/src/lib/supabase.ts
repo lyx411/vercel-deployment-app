@@ -1,106 +1,437 @@
-import { createClient } from '@supabase/supabase-js';
-import { v4 as uuidv4 } from 'uuid';
-import { ChatMessage, HostInfo } from '@shared/schema';
+import { SupabaseClient, createClient } from '@supabase/supabase-js'
+import { v4 as uuidv4 } from 'uuid'
+import { getWindow, isBrowser } from './browserUtils'
 
-// Check if Supabase is properly configured
-const supabaseUrl = (import.meta.env?.VITE_SUPABASE_URL as string) || 'https://bazwlkkiodtuhepunqwz.supabase.co';
-const supabaseKey = (import.meta.env?.VITE_SUPABASE_ANON_KEY as string) || '';
-const isSupabaseConfigured = !!supabaseUrl && !!supabaseKey;
+// 环境变量
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-// 确认使用的实际URL和Key
-console.log('Using Supabase URL:', supabaseUrl);
-console.log('Using Supabase Key (first 10 chars):', supabaseKey.substring(0, 10) + '...');
-
-// Debug info
-console.log('Supabase configured:', isSupabaseConfigured);
-if (!isSupabaseConfigured) {
-  console.warn('Supabase environment variables are not set correctly');
-  console.log('VITE_SUPABASE_URL:', supabaseUrl ? 'set' : 'not set');
-  console.log('VITE_SUPABASE_ANON_KEY:', supabaseKey ? 'set' : 'not set');
+// 类型定义
+type Message = {
+  id: string
+  created_at: string
+  content: string
+  translated_content: string | null
+  role: 'user' | 'host'
+  session_id: string
+  source_language?: string | null
+  target_language?: string | null
+  translation_status?: 'pending' | 'completed' | 'failed' | null
 }
 
-// Force local mode for debugging (set to true to bypass Supabase)
-const forceLocalMode = false;
-
-// Track host IDs for sessions
-const sessionHostIds: Record<string, string> = {};
-
-// 内存中存储消息翻译，因为数据库中没有这些列
-// 键格式：`${messageId}`，值格式：{ translated_content, translation_status }
-export const messageTranslations: Record<string, { translated_content?: string, translation_status: 'pending' | 'completed' | 'failed' }> = {};
-
-// 添加回调函数存储，用于翻译完成时立即通知UI
-export const translationCallbacks: Record<string, ((translated: string) => void)[]> = {};
-
-// 用户的语言偏好
-let userLanguagePreference: string | null = null;
-
-// WebSocket连接
-let wsConnection: WebSocket | null = null;
-let wsConnectionStatus: 'connecting' | 'connected' | 'disconnected' | 'failed' = 'disconnected';
-let reconnectAttempts = 0;
-const maxReconnectAttempts = 5;
-const reconnectInterval = 3000; // 重连间隔(毫秒)
-let heartbeatInterval: number | null = null;
-let currentSessionId: string = ''; // 当前会话ID，在初始化WebSocket时设置
-
-// 全局事件发射器
-const wsStatusChangeEvents: Array<(status: typeof wsConnectionStatus) => void> = [];
-
-// 获取WebSocket连接状态的函数
-export function getWsConnectionStatus(): typeof wsConnectionStatus {
-  return wsConnectionStatus;
+// 工具函数
+const LOG_PREFIX = '[SUPABASE]'
+const log = (message: string, data?: any) => {
+  console.log(`${LOG_PREFIX} ${message}`, data || '')
 }
 
-// 监听WebSocket状态变化的函数
-export function addWsStatusListener(callback: (status: typeof wsConnectionStatus) => void): () => void {
-  wsStatusChangeEvents.push(callback);
+const error = (message: string, err?: any) => {
+  console.error(`${LOG_PREFIX} ${message}`, err || '')
+}
+
+/**
+ * 环境检测和配置
+ */
+export function getEnv() {
+  let host = ''
+  let protocol = 'http:'
+  let wsProtocol = 'ws:'
   
-  // 立即通知当前状态
-  callback(wsConnectionStatus);
-  
-  // 返回移除监听器的函数
-  return () => {
-    const index = wsStatusChangeEvents.indexOf(callback);
-    if (index !== -1) {
-      wsStatusChangeEvents.splice(index, 1);
+  if (isBrowser()) {
+    const location = getWindow()?.location
+    if (location) {
+      host = location.host
+      protocol = location.protocol
+      wsProtocol = protocol === 'https:' ? 'wss:' : 'ws:'
     }
-  };
+  }
+
+  // 环境检测
+  let env = 'production'
+  if (host.includes('localhost')) {
+    env = 'local'
+  } else if (host.includes('replit')) {
+    env = 'replit'
+  } else if (host.includes('cloudflare')) {
+    env = 'cloudflare'
+  }
+
+  log(`检测到环境: ${env}, 主机: ${host}`)
+  
+  return { host, protocol, wsProtocol, env }
 }
 
-// 更新WebSocket状态并触发事件的函数
-function updateWsStatus(newStatus: typeof wsConnectionStatus) {
-  if (wsConnectionStatus !== newStatus) {
-    wsConnectionStatus = newStatus;
+// Supabase客户端
+let supabaseInstance: SupabaseClient | null = null
+
+/**
+ * 初始化Supabase客户端
+ */
+export function initSupabase() {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    error('初始化失败 - Supabase配置缺失')
+    return null
+  }
+
+  try {
+    log('初始化Supabase客户端')
     
-    // 触发所有状态变化事件
-    wsStatusChangeEvents.forEach(callback => {
-      try {
-        callback(wsConnectionStatus);
-      } catch (error) {
-        console.error('处理WebSocket状态变化事件时出错:', error);
-      }
-    });
+    supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+      },
+    })
+    
+    log('Supabase客户端初始化成功')
+    return supabaseInstance
+  } catch (err) {
+    error('初始化Supabase客户端失败', err)
+    return null
   }
 }
 
-// 翻译映射表 - 模拟基本翻译
-const translationMap: Record<string, Record<string, string>> = {
-  'en': {
-    'Hello! Welcome to the chat. How can I help you today?': '您好！欢迎来到聊天。今天我能为您提供什么帮助？',
-    'How can I help you?': '我能帮您什么？',
-    'Thank you for your message.': '感谢您的留言。',
-    'Is there anything else I can assist with?': '还有什么我能帮助您的吗？'
-  },
-  'zh': {
-    '您好！欢迎来到聊天。今天我能为您提供什么帮助？': 'Hello! Welcome to the chat. How can I help you today?',
-    '我能帮您什么？': 'How can I help you?',
-    '感谢您的留言。': 'Thank you for your message.',
-    '还有什么我能帮助您的吗？': 'Is there anything else I can assist with?'
+/**
+ * 获取Supabase客户端实例
+ */
+export function getSupabase() {
+  if (!supabaseInstance) {
+    return initSupabase()
   }
-};
+  return supabaseInstance
+}
 
-// Initialize Supabase client if configured
-export const supabase = (isSupabaseConfigured && !forceLocalMode)
-  ? createClient(supabaseUrl, supabaseKey)
-  : null;
+/**
+ * Websocket连接状态管理
+ */
+let wsConnection: WebSocket | null = null
+let wsConnectAttempts = 0
+const MAX_WS_RECONNECT_ATTEMPTS = 3
+
+export function getWsConnectionStatus() {
+  if (!wsConnection) return 'closed'
+  
+  switch(wsConnection.readyState) {
+    case 0: return 'connecting'
+    case 1: return 'open'
+    case 2: return 'closing'
+    case 3: return 'closed'
+    default: return 'unknown'
+  }
+}
+
+/**
+ * 初始化WebSocket连接
+ */
+export function initWebSocketConnection(userLanguage: string = 'zh-CN') {
+  if (!isBrowser()) {
+    log('非浏览器环境，跳过WebSocket初始化')
+    return null
+  }
+
+  const { env, wsProtocol, host } = getEnv()
+  let wsUrl = ''
+  
+  // 根据环境选择WebSocket URL
+  if (env === 'local') {
+    wsUrl = `${wsProtocol}//localhost:3001/translate`
+  } else if (env === 'replit') {
+    wsUrl = `${wsProtocol}//${host}/translate`
+  } else if (env === 'cloudflare') {
+    wsUrl = `${wsProtocol}//${host}/translate`
+  } else {
+    // 生产环境
+    wsUrl = `${wsProtocol}//${host}/api/translate`
+  }
+  
+  log(`初始化WebSocket连接: ${wsUrl}`)
+  
+  try {
+    wsConnection = new WebSocket(wsUrl)
+    
+    wsConnection.onopen = () => {
+      log('WebSocket连接已打开')
+      wsConnectAttempts = 0
+      
+      // 发送用户语言偏好
+      if (wsConnection && wsConnection.readyState === 1) {
+        wsConnection.send(JSON.stringify({
+          action: 'setUserLanguage',
+          language: userLanguage
+        }))
+        log(`已发送用户语言偏好: ${userLanguage}`)
+        
+        // 设置心跳
+        setInterval(() => {
+          if (wsConnection && wsConnection.readyState === 1) {
+            wsConnection.send(JSON.stringify({
+              action: 'heartbeat'
+            }))
+          }
+        }, 30000)
+      }
+    }
+    
+    wsConnection.onclose = () => {
+      log('WebSocket连接已关闭')
+      
+      // 尝试重连
+      if (wsConnectAttempts < MAX_WS_RECONNECT_ATTEMPTS) {
+        wsConnectAttempts++
+        log(`尝试重新连接 WebSocket (${wsConnectAttempts}/${MAX_WS_RECONNECT_ATTEMPTS})`)
+        setTimeout(() => initWebSocketConnection(userLanguage), 2000)
+      } else {
+        error('达到最大重连次数，WebSocket服务不可用')
+      }
+    }
+    
+    wsConnection.onerror = (err) => {
+      error('WebSocket连接错误', err)
+    }
+    
+    return wsConnection
+  } catch (err) {
+    error('初始化WebSocket连接失败', err)
+    return null
+  }
+}
+
+/**
+ * 翻译回调注册
+ */
+type TranslationCallback = (translatedText: string) => void
+const translationCallbacks: Record<string, TranslationCallback> = {}
+
+export function registerTranslationCallback(messageId: string, callback: TranslationCallback) {
+  translationCallbacks[messageId] = callback
+  log(`已注册翻译回调: ${messageId}`)
+}
+
+export function unregisterTranslationCallback(messageId: string) {
+  if (translationCallbacks[messageId]) {
+    delete translationCallbacks[messageId]
+    log(`已注销翻译回调: ${messageId}`)
+  }
+}
+
+/**
+ * 通过WebSocket发送翻译请求
+ */
+export function translateMessage(message: Message) {
+  if (!wsConnection || wsConnection.readyState !== 1) {
+    error('WebSocket未连接，无法发送翻译请求')
+    return false
+  }
+  
+  try {
+    const request = {
+      action: 'translate',
+      messageId: message.id,
+      text: message.content,
+      targetLanguage: message.target_language || 'zh-CN',
+      sourceLanguage: message.source_language || 'auto'
+    }
+    
+    log(`发送翻译请求: ${message.id}`)
+    wsConnection.send(JSON.stringify(request))
+    return true
+  } catch (err) {
+    error('发送翻译请求失败', err)
+    return false
+  }
+}
+
+/**
+ * 获取聊天消息
+ */
+export async function getChatMessages(sessionId: string) {
+  const supabase = getSupabase()
+  if (!supabase) {
+    error('获取聊天消息失败 - Supabase客户端未初始化')
+    return []
+  }
+  
+  try {
+    log(`正在获取会话消息: ${sessionId}`)
+    const { data, error: queryError } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('session_id', sessionId)
+      .order('created_at', { ascending: true })
+    
+    if (queryError) {
+      throw queryError
+    }
+    
+    log(`已获取${data?.length || 0}条消息`)
+    return data || []
+  } catch (err) {
+    error('获取聊天消息失败', err)
+    return []
+  }
+}
+
+/**
+ * 发送消息
+ */
+export async function sendMessage(content: string, sessionId: string, role: 'user' | 'host' = 'user') {
+  // 防止空消息
+  if (!content.trim()) {
+    error('发送失败 - 消息内容为空')
+    return null
+  }
+  
+  // 创建消息对象
+  const messageId = uuidv4()
+  const message: Message = {
+    id: messageId,
+    created_at: new Date().toISOString(),
+    content,
+    translated_content: null,
+    role,
+    session_id: sessionId,
+    translation_status: role === 'host' ? 'pending' : null,
+    source_language: role === 'host' ? 'en' : 'zh-CN',
+    target_language: role === 'host' ? 'zh-CN' : 'en'
+  }
+  
+  log(`发送消息: ${role} - ${messageId}`)
+  
+  // 获取Supabase客户端
+  const supabase = getSupabase()
+  if (!supabase) {
+    error('发送消息失败 - Supabase客户端未初始化')
+    return message
+  }
+  
+  try {
+    // 插入数据库
+    const { error: insertError } = await supabase
+      .from('messages')
+      .insert(message)
+    
+    if (insertError) {
+      throw insertError
+    }
+    
+    log(`消息已保存到数据库: ${messageId}`)
+    
+    // 如果是客服消息，触发翻译
+    if (role === 'host') {
+      translateMessage(message)
+    }
+    
+    return message
+  } catch (err) {
+    error('保存消息到数据库失败', err)
+    return message
+  }
+}
+
+/**
+ * 获取或创建聊天会话
+ */
+export async function getOrCreateChatSession() {
+  const supabase = getSupabase()
+  if (!supabase) {
+    error('创建会话失败 - Supabase客户端未初始化')
+    return { sessionId: `local-${uuidv4()}` }
+  }
+  
+  const sessionId = uuidv4()
+  log(`正在创建新会话: ${sessionId}`)
+  
+  try {
+    const { error: insertError } = await supabase
+      .from('sessions')
+      .insert({
+        id: sessionId,
+        created_at: new Date().toISOString(),
+        status: 'active'
+      })
+    
+    if (insertError) {
+      throw insertError
+    }
+    
+    // 验证会话创建成功
+    const { data, error: queryError } = await supabase
+      .from('sessions')
+      .select('id')
+      .eq('id', sessionId)
+      .single()
+    
+    if (queryError || !data) {
+      throw queryError || new Error('会话创建失败')
+    }
+    
+    log(`会话创建成功: ${sessionId}`)
+    return { sessionId }
+  } catch (err) {
+    error('创建会话失败', err)
+    return { sessionId: `local-${uuidv4()}` }
+  }
+}
+
+/**
+ * 订阅新消息
+ */
+export function subscribeToMessages(sessionId: string, onNewMessage: (message: Message) => void) {
+  if (!sessionId) {
+    error('订阅失败 - 会话ID为空')
+    return null
+  }
+  
+  log(`设置消息订阅: ${sessionId}`)
+  
+  // 轮询获取消息
+  const intervalId = setInterval(async () => {
+    const supabase = getSupabase()
+    if (!supabase) return
+    
+    try {
+      const { data, error: queryError } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+      
+      if (queryError) {
+        throw queryError
+      }
+      
+      if (data && data.length > 0) {
+        const lastMessage = data[0]
+        if (lastMessage && (lastMessage as any)._isNew !== true) {
+          (lastMessage as any)._isNew = true
+          onNewMessage(lastMessage)
+        }
+      }
+    } catch (err) {
+      error('获取新消息失败', err)
+    }
+  }, 3000)
+  
+  return {
+    unsubscribe: () => {
+      clearInterval(intervalId)
+      log(`已取消消息订阅: ${sessionId}`)
+    }
+  }
+}
+
+// 导出默认函数
+export default {
+  initSupabase,
+  getSupabase,
+  initWebSocketConnection,
+  getWsConnectionStatus,
+  getChatMessages,
+  sendMessage,
+  getOrCreateChatSession,
+  subscribeToMessages,
+  registerTranslationCallback,
+  unregisterTranslationCallback,
+  translateMessage
+}
