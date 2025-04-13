@@ -39,12 +39,23 @@ export default defineConfig({
       external: ['ws'],
       onwarn(warning, warn) {
         if (warning.code === 'MODULE_LEVEL_DIRECTIVE' || 
-            warning.code === 'THIS_IS_UNDEFINED') {
+            warning.code === 'THIS_IS_UNDEFINED' ||
+            warning.code === 'MISSING_EXPORT' ||
+            warning.code === 'CIRCULAR_DEPENDENCY') {
           return;
         }
         warn(warning);
+      },
+      output: {
+        format: 'es',
+        globals: {
+          'ws': 'WebSocket'
+        }
       }
     },
+    target: 'es2018',
+    sourcemap: false,
+    minify: 'terser'
   },
   publicDir: path.resolve(__dirname, "client/public"),
   appType: "spa",
