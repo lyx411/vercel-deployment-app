@@ -1,64 +1,67 @@
 /**
- * 安全地检查当前是否在浏览器环境中运行
+ * 浏览器环境工具函数
+ * 这个文件用于提供安全的浏览器API访问，
+ * 以解决Rollup构建时的'window is not defined'错误
  */
-export const isBrowser = typeof window !== 'undefined';
 
-/**
- * 安全地访问localStorage
- */
-export const safeLocalStorage = {
-  getItem: (key: string): string | null => {
-    if (isBrowser) {
-      return localStorage.getItem(key);
-    }
-    return null;
-  },
-  setItem: (key: string, value: string): void => {
-    if (isBrowser) {
-      localStorage.setItem(key, value);
-    }
-  },
-  removeItem: (key: string): void => {
-    if (isBrowser) {
-      localStorage.removeItem(key);
-    }
+// 安全地获取window对象，在SSR环境下返回undefined
+export const getWindow = (): Window | undefined => {
+  if (typeof window !== 'undefined') {
+    return window;
   }
+  return undefined;
 };
 
-/**
- * 安全地访问window.location
- */
-export const safeLocation = {
-  get protocol(): string {
-    return isBrowser ? window.location.protocol : 'http:';
-  },
-  get host(): string {
-    return isBrowser ? window.location.host : '';
-  },
-  get hostname(): string {
-    return isBrowser ? window.location.hostname : '';
-  },
-  includes: (domain: string): boolean => {
-    return isBrowser ? window.location.host.includes(domain) : false;
+// 安全地获取document对象
+export const getDocument = (): Document | undefined => {
+  if (typeof document !== 'undefined') {
+    return document;
   }
+  return undefined;
 };
 
-/**
- * 安全的WebSocket连接创建器
- */
-export const createSafeWebSocket = (url: string): WebSocket | null => {
-  if (isBrowser) {
-    return new WebSocket(url);
+// 安全地获取navigator对象
+export const getNavigator = (): Navigator | undefined => {
+  if (typeof navigator !== 'undefined') {
+    return navigator;
   }
-  return null;
+  return undefined;
 };
 
-/**
- * WebSocket就绪状态常量
- */
-export const WsReadyState = {
-  CONNECTING: 0,
-  OPEN: 1,
-  CLOSING: 2,
-  CLOSED: 3
+// 安全地获取localStorage
+export const getLocalStorage = (): Storage | undefined => {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      return localStorage;
+    }
+  } catch (e) {
+    console.warn('localStorage不可用', e);
+  }
+  return undefined;
+};
+
+// 安全地获取sessionStorage
+export const getSessionStorage = (): Storage | undefined => {
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      return sessionStorage;
+    }
+  } catch (e) {
+    console.warn('sessionStorage不可用', e);
+  }
+  return undefined;
+};
+
+// 判断是否在浏览器环境
+export const isBrowser = (): boolean => {
+  return typeof window !== 'undefined';
+};
+
+export default {
+  getWindow,
+  getDocument,
+  getNavigator,
+  getLocalStorage,
+  getSessionStorage,
+  isBrowser
 };
