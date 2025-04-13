@@ -4,7 +4,6 @@ import themePlugin from "@replit/vite-plugin-shadcn-theme-json";
 import path, { dirname } from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 import { fileURLToPath } from "url";
-import history from 'vite-plugin-rewrite-all';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -14,7 +13,6 @@ export default defineConfig({
     react(),
     runtimeErrorOverlay(),
     themePlugin(),
-    history(),  // 添加此插件以支持SPA客户端路由
     ...(process.env.NODE_ENV !== "production" &&
     process.env.REPL_ID !== undefined
       ? [
@@ -34,4 +32,8 @@ export default defineConfig({
     outDir: path.resolve(__dirname, "../dist/public"),
     emptyOutDir: true,
   },
+  server: {
+    // 确保开发服务器能够处理客户端路由
+    historyApiFallback: true
+  }
 });
