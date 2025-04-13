@@ -1,51 +1,59 @@
-import { HostInfo } from '@shared/schema';
+import React from 'react';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { Button } from './ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
+import TranslateIcon from './icons/TranslateIcon';
 
 interface ChatHeaderProps {
-  hostInfo: HostInfo;
+  merchantName?: string;
+  avatarUrl?: string;
+  targetLanguage?: string;
+  isTranslationEnabled: boolean;
+  onToggleTranslation: () => void;
 }
 
-export function ChatHeader({ hostInfo }: ChatHeaderProps) {
+export default function ChatHeader({
+  merchantName = '在线客服',
+  avatarUrl = 'https://ui-avatars.com/api/?name=CS',
+  targetLanguage,
+  isTranslationEnabled,
+  onToggleTranslation
+}: ChatHeaderProps) {
+  const { currentLanguage } = useLanguage();
+  
+  // 获取WebSocket基础URL
+  const getWsBaseUrl = () => {
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const host = window.location.host;
+    return `${protocol}://${host}`;
+  };
+  
   return (
-    <div className="py-3 px-4 bg-gradient-to-r from-[#4285F4] to-[#34A853] text-white shadow-sm w-full">
-      <div className="flex items-center justify-start">
-        <div className="flex items-center">
-          <div className="w-12 h-12 rounded-full overflow-hidden mr-3 bg-gray-200 flex-shrink-0 flex items-center justify-center">
-            {hostInfo.avatarUrl ? (
-              <img 
-                src={hostInfo.avatarUrl}
-                alt="Profile" 
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="w-full h-full bg-white text-[#4285F4] flex items-center justify-center text-lg font-bold">
-                {hostInfo.name.charAt(0).toUpperCase()}
-              </div>
-            )}
-          </div>
-          
-          <div>
-            <div className="font-medium text-xl text-white">{hostInfo.name}</div>
-            {hostInfo.title && (
-              <div className="text-sm text-white">
-                {hostInfo.title}
-              </div>
-            )}
-          </div>
+    <div className="flex items-center justify-between p-4 border-b">
+      <div className="flex items-center gap-3">
+        <Avatar className="h-10 w-10">
+          <AvatarImage src={avatarUrl} alt={merchantName} />
+          <AvatarFallback>{merchantName.substring(0, 2)}</AvatarFallback>
+        </Avatar>
+        <div>
+          <h2 className="text-lg font-semibold">{merchantName}</h2>
+          <p className="text-sm text-muted-foreground">
+            {isTranslationEnabled
+              ? `翻译已开启 (${currentLanguage} → ${targetLanguage || '自动'})`
+              : '点击开启翻译功能'}
+          </p>
         </div>
-        
-        {hostInfo.url && (
-          <div className="ml-auto">
-            <a 
-              href={`https://${hostInfo.url.replace(/^https?:\/\//, '')}`}
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="border border-white text-white text-sm hover:bg-white/10 rounded-full px-5 py-2 transition-colors"
-            >
-              <span>保存二维码</span>
-            </a>
-          </div>
-        )}
       </div>
+      
+      <Button
+        variant={isTranslationEnabled ? "default" : "outline"}
+        size="icon"
+        onClick={onToggleTranslation}
+        title={isTranslationEnabled ? "关闭翻译" : "开启翻译"}
+        aria-label={isTranslationEnabled ? "关闭翻译" : "开启翻译"}
+      >
+        <TranslateIcon className={`h-5 w-5 ${isTranslationEnabled ? 'text-white' : ''}`} />
+      </Button>
     </div>
   );
 }
