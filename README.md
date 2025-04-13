@@ -1,56 +1,66 @@
-# 多语言实时通讯应用 - Vercel部署包
+# 多语言实时翻译聊天应用
 
-## 部署步骤
+这是一个使用React、Express和WebSocket技术构建的实时翻译聊天应用，支持多种语言之间的即时翻译。
 
-1. 在Vercel上创建一个新项目
-2. 导入GitHub仓库或使用Vercel CLI上传此文件夹
-3. 配置以下环境变量:
-   - DATABASE_URL: 您的PostgreSQL数据库URL
-   - VITE_SUPABASE_URL: 您的Supabase项目URL
-   - VITE_SUPABASE_ANON_KEY: 您的Supabase匿名密钥
+## 主要功能
 
-## 重要说明
+- 实时消息传递
+- 自动消息翻译
+- 多语言支持
+- 响应式设计，适配移动端和桌面端
+- 用户头像和名称定制
 
-- 此部署包针对Vercel平台进行了特别配置
-- 确保您的Supabase Edge Function已经部署并正确配置
-- 确保在Supabase项目的CORS设置中允许您的Vercel域名访问WebSocket
+## 技术栈
 
-## 部署指南
+- **前端**: React, TailwindCSS, Shadcn UI
+- **后端**: Express.js, WebSockets
+- **数据库**: Supabase
+- **翻译**: Supabase Edge Functions
 
-### 方法1：使用Vercel CLI
+## 快速开始
 
-1. 安装Vercel CLI:
-   ```
-   npm install -g vercel
-   ```
+### 开发环境设置
 
-2. 在此文件夹中运行:
-   ```
-   vercel
-   ```
+1. 克隆仓库
 
-3. 按照CLI提示完成部署过程
-4. 配置环境变量
+```bash
+git clone https://github.com/yourusername/multilingual-chat-app.git
+cd multilingual-chat-app
+```
 
-### 方法2：通过Vercel网站部署
+2. 安装依赖
 
-1. 将此文件夹上传到GitHub仓库
-2. 在Vercel控制面板中创建新项目
-3. 导入您的GitHub仓库
-4. 配置环境变量
-5. 部署配置：
-   - 构建命令: npm run build
-   - 输出目录: dist
-   - 开发命令: npm run dev
-6. 点击"Deploy"按钮
+```bash
+npm install
+```
 
-## 验证部署
+3. 创建环境变量文件
 
-1. 部署完成后，访问Vercel提供的URL
-2. 打开浏览器开发者工具，检查控制台输出
-3. 您应该能看到"WebSocket连接已建立"的消息
-4. 测试不同语言的消息翻译功能
+复制`.env.example`到`.env`并填写必要的环境变量。
 
-## 技术支持
+4. 启动开发服务器
 
-如有任何问题，请联系开发者。
+```bash
+npm run dev
+```
+
+### 部署
+
+该应用支持在Vercel上部署，详细请参考[部署文档](./DEPLOY.md)。
+
+## 项目结构
+
+```
+├── client          # 前端React应用
+├── server          # 后端Express服务器
+├── shared          # 共享类型和实用工具
+└── package.json    # 项目依赖和脚本
+```
+
+## 贡献
+
+欢迎提交PR和Issue！
+
+## 许可证
+
+MIT
