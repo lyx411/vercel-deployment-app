@@ -103,6 +103,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // 创建HTTP服务器但不监听(会在index.ts中监听)
   const server = createServer(app);
   
+  // 获取当前部署的域名（用于WebSocket连接）
+  const getDomainName = (): string => {
+    // 尝试从环境变量获取Vercel URL
+    if (process.env.VERCEL_URL) {
+      return `https://${process.env.VERCEL_URL}`;
+    }
+    
+    // 如果有自定义域名设置
+    if (process.env.DOMAIN_NAME) {
+      return process.env.DOMAIN_NAME.startsWith('http') 
+        ? process.env.DOMAIN_NAME 
+        : `https://${process.env.DOMAIN_NAME}`;
+    }
+    
+    // 如果是本地开发环境
+    if (process.env.NODE_ENV === 'development') {
+      return 'http://localhost:5000';
+    }
+    
+    // 默认返回Vercel域名
+    return 'https://vercel-deployment-app.vercel.app';
+  };
+  
   // 添加WebSocket服务器，使用独立路径以避免与Vite热更新冲突
   const wss = new WebSocketServer({ 
     server, 
@@ -116,7 +139,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // 处理Edge Function代理连接
-  edgeFunctionProxy.on('connection', (clientWs) => {
+  edgeFunctionProxy.on('connection', (clientWs, req) => {
     console.log('客户端已连接到Edge Function代理');
     
     // 从ws对象中获取token
@@ -125,7 +148,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     
     try {
       // 尝试从查询字符串中获取token
-      const reqUrl = (clientWs as any).upgradeReq?.url || (clientWs as any).req?.url || '';
+      const reqUrl = req?.url || '';
       if (reqUrl) {
         const requestUrl = new URL('http://localhost' + reqUrl);
         token = requestUrl.searchParams.get('token') || '';
@@ -140,15 +163,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('无法从WebSocket连接中获取token，使用服务端授权密钥');
     }
     
-    // 构建Supabase Edge Function WebSocket URL - 使用固定的正确URL
-    // process.env.SUPABASE_URL在Replit中对应的是bazwlkkiodtuhepunqwz.supabase.co
-    // 但是Edge Function部署在wanrxefvgarsndfceelf.supabase.co
+    // 获取当前域名或来源信息
+    let origin = '';
+    try {
+      if (req.headers.origin) {
+        origin = req.headers.origin;
+        console.log('从请求头获取到Origin:', origin);
+      } else if (req.headers.referer) {
+        origin = new URL(req.headers.referer).origin;
+        console.log('从Referer获取到Origin:', origin);
+      } else {
+        origin = getDomainName();
+        console.log('使用环境变量或默认值作为Origin:', origin);
+      }
+    } catch (error) {
+      console.error('解析Origin时出错:', error);
+      origin = getDomainName();
+    }
+    
+    // 构建Supabase Edge Function WebSocket URL
     const edgeFunctionWsUrl = 'wss://wanrxefvgarsndfceelf.supabase.co/functions/v1/websocket-translator';
-    console.log('使用硬编码的Edge Function URL连接:', edgeFunctionWsUrl);
+    console.log('使用Edge Function URL连接:', edgeFunctionWsUrl);
     // 从用户提供的示例来看，URL应该没有任何参数
     const fullUrl = edgeFunctionWsUrl;
     
     console.log('正在连接到Supabase Edge Function:', fullUrl);
+    console.log('使用Origin:', origin);
     
     // 创建到Edge Function的连接
     try {
@@ -157,8 +197,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // 使用Node.js实现的WebSocket客户端连接到Edge Function
       const serverWs = new WebSocket(fullUrl, {
         headers: {
-          'Origin': 'https://7b7822f0-3d7b-45cf-9e31-2689cd7398f1-00-3u4des5pa3qmk.riker.replit.dev',
-          'User-Agent': 'Mozilla/5.0 (Replit Proxy)',
+          'Origin': origin,
+          'User-Agent': 'Vercel Serverless Function',
           'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8'
         }
       });
@@ -253,29 +293,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       clientWs.close();
     }
   });
-
-  // 兼容两种翻译API:
-  // 1. 通过WebSocket本地翻译处理
-  // 2. 通过HTTP请求转发到Supabase Edge Functions
   
-  // 定义Supabase翻译函数URL - 使用Edge Function所在的Supabase项目
-  // 根据用户提供的信息，Edge Function部署在wanrxefvgarsndfceelf项目中
+  // 使用Supabase Edge Function进行翻译的HTTP端点URL
   const supabaseTranslateMessageUrl = 'https://wanrxefvgarsndfceelf.supabase.co/functions/v1/translate-message';
   const supabaseWsTranslatorUrl = 'wss://wanrxefvgarsndfceelf.supabase.co/functions/v1/websocket-translator';
+  
   console.log('使用Edge Function URL:', supabaseTranslateMessageUrl);
   
   // 调用Supabase Edge Function进行翻译
   async function callSupabaseTranslate(params: any): Promise<any> {
     console.log('调用Supabase Edge Function翻译:', params);
     
-    // 确保有必要的参数
     if (!params.messageId || !params.sourceText) {
-      console.error('缺少必要参数: messageId 或 sourceText');
+      console.error('缺少必要参数: 消息ID 或 源文本');
       throw new Error('缺少必要参数');
     }
     
     try {
-      // 使用translate-message端点，这个支持HTTP POST请求
       const response = await fetch(supabaseTranslateMessageUrl, {
         method: 'POST',
         headers: {
@@ -302,62 +336,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('调用Supabase Edge Function出错:', error);
       
-      // 出错时回退到本地翻译
+      // 如果Edge Function调用失败，尝试使用本地翻译
       const { sourceText, targetLanguage } = params;
       const translation = getLocalTranslation(sourceText, 'auto', targetLanguage);
-      
-      // 返回本地处理结果
-      return { 
+      return {
         translation: translation || `[本地翻译] ${sourceText}`,
         fromCache: true
       };
     }
   }
   
-  // 提供本地翻译功能作为备选
+  // 提供基本本地翻译功能作为备份
   function getLocalTranslation(content: string, sourceLanguage: string, targetLanguage: string): string | null {
-    // 中文到英文的简单翻译映射
     if (sourceLanguage === 'zh' && targetLanguage === 'en') {
       if (content.includes('您好') || content.includes('你好')) {
         return 'Hello! How can I help you?';
       } else if (content.includes('谢谢')) {
         return 'Thank you!';
       }
-    }
-    // 英文到中文的简单翻译映射
-    else if ((sourceLanguage === 'en' || sourceLanguage === 'auto') && targetLanguage === 'zh') {
-      if (content.includes('Hello') || content.includes('hello') || content.includes('Hi')) {
+    } else if ((sourceLanguage === 'en' || sourceLanguage === 'auto') && targetLanguage === 'zh') {
+      if (content.includes('hello') || content.includes('hi') || content.includes('hey')) {
         return '您好！有什么我可以帮助您的吗？';
-      } else if (content.includes('Thank you') || content.includes('thank you')) {
+      } else if (content.includes('thank you') || content.includes('thanks')) {
         return '谢谢您！';
-      } else if (content.includes('Welcome to the chat')) {
+      } else if (content.includes('welcome to chat')) {
         return '您好！欢迎来到聊天。今天我能为您提供什么帮助？';
       } else if (content.includes('test message')) {
-        // 处理测试消息
         return '这是一条测试消息' + (content.includes('API') ? '（通过API发送）' : '') + '。';
       }
     }
-    
     return null;
   }
   
-  // 处理WebSocket连接
+  // 翻译WebSocket服务器处理连接
   wss.on('connection', (ws) => {
     console.log('翻译WebSocket连接已建立');
     
-    // 发送欢迎消息
     ws.send(JSON.stringify({
       type: 'connection_established',
       timestamp: new Date().toISOString()
     }));
     
-    // 处理消息
     ws.on('message', async (message) => {
       try {
         const data = JSON.parse(message.toString());
         console.log('收到WebSocket消息:', data);
         
-        // 处理心跳请求 - 支持两种格式
+        // 处理心跳消息
         if (data.type === 'ping' || data.action === 'heartbeat') {
           ws.send(JSON.stringify({
             type: data.type === 'ping' ? 'pong' : 'heartbeat_response',
@@ -366,23 +391,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return;
         }
         
-        // 处理翻译请求 - 兼容APP格式和Web格式
+        // 处理翻译请求
         if (data.type === 'translate' || data.action === 'translate') {
-          // 解析请求数据（兼容两种格式）
           const messageId = data.message_id || data.messageId;
           const content = data.content || data.sourceText;
           const sourceLanguage = data.source_language || data.sourceLanguage || 'auto';
-          const targetLanguage = data.target_language || data.targetLanguage || 'zh'; // 默认使用中文而不是英文作为目标语言
+          const targetLanguage = data.target_language || data.targetLanguage || 'zh';
           
           console.log(`处理翻译请求: ${messageId}, 源语言: ${sourceLanguage}, 目标语言: ${targetLanguage}`);
           
-          // 先尝试本地翻译
+          // 首先尝试本地翻译
           let translatedContent = getLocalTranslation(content, sourceLanguage, targetLanguage);
           
-          // 如果本地翻译不可用，尝试调用Supabase Edge Function
+          // 如果本地翻译失败，尝试使用Supabase Edge Function
           if (!translatedContent && supabaseAdmin) {
             try {
-              // 准备请求参数
               const params = {
                 action: 'translate',
                 translationId: uuidv4(),
@@ -392,9 +415,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 sourceLanguage: sourceLanguage
               };
               
-              // 调用Supabase Edge Function
               const result = await callSupabaseTranslate(params);
-              
               if (result && result.translation) {
                 translatedContent = result.translation;
                 console.log(`Supabase Edge Function返回翻译: ${translatedContent}`);
@@ -404,28 +425,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
           
-          // 如果没有翻译结果，使用默认值
+          // 如果所有翻译方法都失败，使用未翻译的原文
           if (!translatedContent) {
             translatedContent = `[未翻译] ${content}`;
           }
           
-          // 如果是测试消息并且包含"test message"，确保有翻译结果
+          // 对测试消息提供中文翻译
           if (content.includes('test message') && targetLanguage === 'zh') {
             translatedContent = '这是一条测试消息' + (content.includes('API') ? '（通过API发送）' : '') + '。';
           }
           
           console.log(`翻译结果: ${translatedContent}`);
           
-          // 发送翻译结果 - 根据请求格式选择响应格式
+          // 根据请求类型返回不同格式的响应
           if (data.type === 'translate') {
-            // 网页请求格式 - type: translation
             ws.send(JSON.stringify({
-              type: 'translation',
+              type: 'translate',
               message_id: messageId,
               translated_content: translatedContent
             }));
           } else {
-            // APP请求格式 - type: translation_complete
             ws.send(JSON.stringify({
               type: 'translation_complete',
               messageId: messageId,
@@ -439,18 +458,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
     
-    // 处理关闭
     ws.on('close', () => {
       console.log('翻译WebSocket连接已关闭');
     });
     
-    // 处理错误
-    ws.on('error', (error: any) => {
+    ws.on('error', (error) => {
       console.error('翻译WebSocket错误:', error);
     });
   });
-
-  console.log('API routes and WebSocket server registered');
+  
+  console.log('API路由和WebSocket服务器已注册');
   
   return server;
 }
