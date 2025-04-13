@@ -1,20 +1,14 @@
 {
-  "version": 2,
-  "builds": [
-    { 
-      "src": "client/package.json", 
-      "use": "@vercel/static-build",
-      "config": { "distDir": "client/dist" }
-    },
-    { 
-      "src": "api/**/*.js", 
-      "use": "@vercel/node" 
-    }
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/" }
   ],
-  "routes": [
-    { "src": "/api/(.*)", "dest": "/api/$1" },
-    { "src": "/(.*)", "dest": "/client/dist/$1" },
-    { "handle": "filesystem" },
-    { "src": "/.*", "dest": "/client/dist/index.html" }
-  ]
+  "functions": {
+    "api/vercel-bridge.js": {
+      "memory": 1024,
+      "maxDuration": 10
+    }
+  },
+  "buildCommand": "npm run vercel-build",
+  "outputDirectory": "dist/public",
+  "framework": "vite"
 }
