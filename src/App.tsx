@@ -1,52 +1,26 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { ThemeProvider, createTheme, CssBaseline } from '@mui/material'
-import { LanguageProvider } from './contexts/LanguageContext'
-import LanguagePage from './pages/LanguagePage'
-import ChatPage from './pages/ChatPage'
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import QRCodePage from './pages/QRCodePage';
+import { AuthProvider } from './contexts/AuthContext';
+import { LanguageProvider } from './contexts/LanguageContext';
+import { ChatProvider } from './contexts/ChatContext';
+import './styles.css';
 
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: '#2563eb',
-    },
-    secondary: {
-      main: '#10b981',
-    },
-    background: {
-      default: '#f3f4f6',
-      paper: '#ffffff',
-    },
-  },
-  typography: {
-    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
-  },
-  components: {
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          textTransform: 'none',
-          borderRadius: 8,
-        },
-      },
-    },
-  },
-})
-
-function App() {
+const App = () => {
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
+    <AuthProvider>
       <LanguageProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/language" element={<LanguagePage />} />
-            <Route path="/chat" element={<ChatPage />} />
-            <Route path="*" element={<Navigate to="/language" replace />} />
-          </Routes>
-        </BrowserRouter>
+        <ChatProvider>
+          <Router>
+            <Routes>
+              <Route path="/qrcode/:sessionId?" element={<QRCodePage />} />
+              <Route path="/" element={<Navigate to="/qrcode" replace />} />
+            </Routes>
+          </Router>
+        </ChatProvider>
       </LanguageProvider>
-    </ThemeProvider>
-  )
-}
+    </AuthProvider>
+  );
+};
 
-export default App
+export default App;
