@@ -10,28 +10,38 @@ import {
   Toolbar, 
   Container,
   Snackbar,
-  Alert
+  Alert,
+  Zoom,
+  Fade,
+  useTheme,
+  useMediaQuery
 } from '@mui/material';
 import { 
   ArrowBack as ArrowBackIcon,
   Share as ShareIcon,
-  Download as DownloadIcon
+  Download as DownloadIcon,
+  ContentCopy as ContentCopyIcon
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useChat } from '../contexts/ChatContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import '../styles.css'; // 导入样式
 
 const QRCodePage = () => {
   const { sessionId } = useParams<{ sessionId?: string }>();
   const { user } = useAuth();
   const { userLanguage } = useLanguage();
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
+  const [shareUrl, setShareUrl] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [shareSuccess, setShareSuccess] = useState<boolean>(false);
+  const [animation, setAnimation] = useState<boolean>(false);
   
   // 生成QR码
   useEffect(() => {
@@ -46,11 +56,15 @@ const QRCodePage = () => {
           ? `${baseUrl}/connect/${sessionId}` 
           : `${baseUrl}/connect/user/${user?.id}`;
         
-        // 使用QR码生成API
-        const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(connectUrl)}`;
+        setShareUrl(connectUrl);
+        
+        // 使用QR码生成API - 高品质设置
+        const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(connectUrl)}&margin=10&qzone=2&format=png&ecc=H`;
         setQrCodeUrl(qrApiUrl);
         
         setLoading(false);
+        // 添加出现动画延迟
+        setTimeout(() => setAnimation(true), 100);
       } catch (err) {
         console.error('QR码生成失败:', err);
         setError(t.errorGenerating);
@@ -67,10 +81,6 @@ const QRCodePage = () => {
   const handleShare = async () => {
     try {
       if (navigator.share) {
-        const shareUrl = sessionId 
-          ? `${window.location.origin}/connect/${sessionId}` 
-          : `${window.location.origin}/connect/user/${user?.id}`;
-        
         await navigator.share({
           title: t.shareTitle,
           text: t.shareText,
@@ -78,10 +88,6 @@ const QRCodePage = () => {
         });
       } else {
         // 如果不支持Web Share API，复制链接到剪贴板
-        const shareUrl = sessionId 
-          ? `${window.location.origin}/connect/${sessionId}` 
-          : `${window.location.origin}/connect/user/${user?.id}`;
-        
         await navigator.clipboard.writeText(shareUrl);
         setShareSuccess(true);
       }
@@ -95,7 +101,7 @@ const QRCodePage = () => {
   const handleDownload = () => {
     const link = document.createElement('a');
     link.href = qrCodeUrl;
-    link.download = `qr-code-${sessionId || user?.id}.png`;
+    link.download = `qrchat-${sessionId || user?.id}.png`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -113,28 +119,32 @@ const QRCodePage = () => {
       subtitle: sessionId 
         ? '扫描二维码加入此聊天' 
         : '扫描二维码联系我',
-      share: '分享',
-      download: '下载',
+      share: '分享链接',
+      download: '下载二维码',
       back: '返回',
       copied: '链接已复制到剪贴板！',
       errorGenerating: 'QR码生成失败',
       errorSharing: '分享失败',
       shareTitle: 'QR扫码聊天',
       shareText: '扫描二维码与我聊天',
+      copyLink: '复制链接',
+      scan: '扫一扫'
     },
     'en': {
       title: 'QR Code Share',
       subtitle: sessionId 
         ? 'Scan QR code to join this chat' 
         : 'Scan QR code to contact me',
-      share: 'Share',
-      download: 'Download',
+      share: 'Share Link',
+      download: 'Download QR',
       back: 'Back',
       copied: 'Link copied to clipboard!',
       errorGenerating: 'Failed to generate QR code',
       errorSharing: 'Failed to share',
       shareTitle: 'QR Code Chat',
       shareText: 'Scan the QR code to chat with me',
+      copyLink: 'Copy Link',
+      scan: 'Scan'
     }
   };
   
@@ -142,8 +152,8 @@ const QRCodePage = () => {
   const t = translations[userLanguage as keyof typeof translations] || translations['zh-CN'];
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      <AppBar position="static">
+    <Box className="qr-page-container">
+      <AppBar position="static" elevation={0} className="qr-appbar">
         <Toolbar>
           <IconButton
             edge="start"
@@ -155,116 +165,137 @@ const QRCodePage = () => {
             <ArrowBackIcon />
           </IconButton>
           
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+          <Typography variant="h6" component="div" className="qr-title" sx={{ flexGrow: 1 }}>
             {t.title}
           </Typography>
         </Toolbar>
       </AppBar>
       
       <Container maxWidth="sm">
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            pt: 4,
-            pb: 4,
-          }}
-        >
-          <Paper 
-            elevation={3} 
-            sx={{ 
-              p: 4, 
-              borderRadius: 2, 
-              display: 'flex', 
-              flexDirection: 'column', 
+        <Fade in={!loading} timeout={800}>
+          <Box
+            className="qr-fade-in"
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
               alignItems: 'center',
-              width: '100%',
+              justifyContent: 'center',
+              pt: 4,
+              pb: 4,
             }}
           >
-            <Typography variant="h5" gutterBottom align="center">
-              {t.title}
-            </Typography>
-            
-            <Typography variant="body1" color="text.secondary" paragraph align="center">
-              {t.subtitle}
-            </Typography>
-            
-            {error && (
-              <Alert severity="error" sx={{ width: '100%', mb: 2 }}>
-                {error}
-              </Alert>
-            )}
-            
-            <Box 
-              sx={{ 
-                mt: 2, 
-                mb: 3, 
-                p: 2, 
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 2,
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                width: '100%',
-                height: 240,
-                bgcolor: 'background.paper'
-              }}
+            <Paper 
+              elevation={isMobile ? 2 : 3} 
+              className="qr-card"
             >
-              {loading ? (
-                <CircularProgress />
-              ) : (
-                <img 
-                  src={qrCodeUrl} 
-                  alt="QR Code" 
-                  style={{ 
-                    maxWidth: '100%', 
-                    maxHeight: '100%' 
-                  }} 
-                />
-              )}
-            </Box>
-            
-            <Box 
-              sx={{ 
-                display: 'flex', 
-                justifyContent: 'center', 
-                width: '100%', 
-                gap: 2 
-              }}
-            >
-              <Button
-                variant="contained"
-                startIcon={<ShareIcon />}
-                onClick={handleShare}
-                disabled={loading}
-                sx={{ flex: 1 }}
+              <Typography 
+                variant="h5" 
+                gutterBottom 
+                align="center" 
+                sx={{ 
+                  fontWeight: 700, 
+                  color: '#1a2c5b',
+                  mb: 1 
+                }}
               >
-                {t.share}
-              </Button>
+                {t.title}
+              </Typography>
+              
+              <Typography 
+                variant="body1" 
+                color="text.secondary" 
+                paragraph 
+                align="center"
+                sx={{ mb: 3 }}
+              >
+                {t.subtitle}
+              </Typography>
+              
+              {error && (
+                <Alert severity="error" className="qr-alert-error" sx={{ width: '100%', mb: 2 }}>
+                  {error}
+                </Alert>
+              )}
+              
+              <Zoom in={animation} timeout={500}>
+                <Box className="qr-display-area">
+                  {loading ? (
+                    <CircularProgress size={60} thickness={4} className="qr-loading-spinner" />
+                  ) : (
+                    <>
+                      <Box sx={{ position: 'relative' }}>
+                        <img 
+                          src={qrCodeUrl} 
+                          alt="QR Code" 
+                          className="qr-image"
+                        />
+                        <Box className="qr-scan-badge">
+                          {t.scan}
+                        </Box>
+                      </Box>
+                    </>
+                  )}
+                </Box>
+              </Zoom>
+              
+              <Box 
+                className="qr-buttons-container"
+                sx={{ 
+                  display: 'flex', 
+                  justifyContent: 'center', 
+                  width: '100%', 
+                  gap: 2,
+                  flexDirection: isMobile ? 'column' : 'row'
+                }}
+              >
+                <Button
+                  variant="contained"
+                  startIcon={<ShareIcon />}
+                  onClick={handleShare}
+                  disabled={loading}
+                  className="qr-share-button"
+                >
+                  {t.share}
+                </Button>
+                
+                <Button
+                  variant="outlined"
+                  startIcon={<DownloadIcon />}
+                  onClick={handleDownload}
+                  disabled={loading}
+                  className="qr-download-button"
+                >
+                  {t.download}
+                </Button>
+              </Box>
               
               <Button
-                variant="outlined"
-                startIcon={<DownloadIcon />}
-                onClick={handleDownload}
+                variant="text"
+                startIcon={<ContentCopyIcon />}
+                onClick={() => {
+                  navigator.clipboard.writeText(shareUrl);
+                  setShareSuccess(true);
+                }}
                 disabled={loading}
-                sx={{ flex: 1 }}
+                className="qr-copy-button"
               >
-                {t.download}
+                {t.copyLink}
               </Button>
-            </Box>
-          </Paper>
-        </Box>
+            </Paper>
+          </Box>
+        </Fade>
       </Container>
       
       <Snackbar
         open={shareSuccess}
         autoHideDuration={3000}
         onClose={handleCloseSnackbar}
-        message={t.copied}
-      />
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={handleCloseSnackbar} severity="success" className="qr-alert-success" sx={{ width: '100%' }}>
+          {t.copied}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };
