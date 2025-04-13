@@ -1,20 +1,19 @@
 {
   "version": 2,
-  "buildCommand": "chmod +x build-vercel.sh && ./build-vercel.sh",
-  "outputDirectory": "dist",
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/vercel-bridge.js" },
-    { "source": "/(.*)", "destination": "/" }
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": ["dist/**", "client/**", "server/**", "shared/**"]
+      }
+    }
   ],
-  "functions": {
-    "api/vercel-bridge.js": {
-      "memory": 1024,
-      "maxDuration": 10
-    }
-  },
-  "build": {
-    "env": {
-      "NODE_ENV": "production"
-    }
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/vercel-bridge.js" },
+    { "src": "/(.*)", "dest": "/dist/public/index.html" }
+  ],
+  "env": {
+    "NODE_ENV": "production"
   }
 }
