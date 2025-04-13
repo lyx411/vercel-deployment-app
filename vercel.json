@@ -1,5 +1,8 @@
 {
   "version": 2,
+  "redirects": [
+    { "source": "/((?!api/).*)/(.*)", "destination": "/" }
+  ],
   "builds": [
     {
       "src": "server/index.ts",
@@ -12,22 +15,5 @@
         "distDir": "dist/public"
       }
     }
-  ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "server/index.ts"
-    },
-    {
-      "src": "/(.*.\\(js|css|png|jpg|gif|svg|ico|json\\))",
-      "dest": "/$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
-    }
-  ],
-  "env": {
-    "NODE_ENV": "production"
-  }
+  ]
 }
