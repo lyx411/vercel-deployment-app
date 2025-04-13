@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
-import { ChatMessage, HostInfo } from '@shared/schema';
+import { ChatMessage, HostInfo } from '../../shared/schema';
 
 // Check if Supabase is properly configured
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
