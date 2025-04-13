@@ -1,0 +1,130 @@
+/* QR Code Page Styles */
+.qrcode-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 2rem;
+  background-color: #f5f7fa;
+}
+
+.qrcode-paper {
+  max-width: 500px;
+  width: 100%;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.qrcode-title {
+  margin-bottom: 0.5rem;
+  color: #333;
+  font-weight: 600;
+  text-align: center;
+}
+
+.qrcode-subtitle {
+  margin-bottom: 2rem;
+  color: #666;
+  text-align: center;
+}
+
+.qrcode-input {
+  margin-bottom: 1.5rem;
+}
+
+.qrcode-button {
+  margin-top: 1rem;
+  margin-bottom: 1.5rem;
+  padding: 0.75rem 2rem;
+  font-weight: 500;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.qrcode-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.qrcode-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem;
+  gap: 1rem;
+}
+
+.qrcode-error {
+  width: 100%;
+  margin: 1rem 0;
+}
+
+.qrcode-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  padding: 1rem;
+}
+
+.qrcode-image {
+  margin: 1rem 0;
+  padding: 1rem;
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.qrcode-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1rem;
+  margin: 1.5rem 0;
+  width: 100%;
+}
+
+.qrcode-action-button {
+  flex: 1;
+  min-width: 140px;
+  padding: 0.75rem;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.qrcode-action-button:hover {
+  background-color: rgba(25, 118, 210, 0.08);
+}
+
+.qrcode-back-button {
+  margin-top: 1.5rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.qrcode-back-button:hover {
+  background-color: rgba(25, 118, 210, 0.08);
+}
+
+/* 响应式调整 */
+@media (max-width: 600px) {
+  .qrcode-container {
+    padding: 1rem;
+  }
+  
+  .qrcode-paper {
+    padding: 1.5rem;
+  }
+  
+  .qrcode-actions {
+    flex-direction: column;
+  }
+  
+  .qrcode-action-button {
+    width: 100%;
+  }
+}
