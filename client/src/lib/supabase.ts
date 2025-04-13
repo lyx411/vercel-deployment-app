@@ -1,6 +1,6 @@
+// 从本地文件上传一个简化版，避免构建错误
 import { SupabaseClient, createClient } from '@supabase/supabase-js'
 import { v4 as uuidv4 } from 'uuid'
-import { getWindow, isBrowser } from './browserUtils'
 
 // 环境变量
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
@@ -28,6 +28,19 @@ const log = (message: string, data?: any) => {
 const error = (message: string, err?: any) => {
   console.error(`${LOG_PREFIX} ${message}`, err || '')
 }
+
+// 安全地获取window对象
+const getWindow = (): Window | undefined => {
+  if (typeof window !== 'undefined') {
+    return window;
+  }
+  return undefined;
+};
+
+// 判断是否在浏览器环境
+const isBrowser = (): boolean => {
+  return typeof window !== 'undefined';
+};
 
 /**
  * 环境检测和配置
