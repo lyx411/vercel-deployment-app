@@ -1,64 +1,65 @@
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Box, Button, Container, Typography, Paper } from '@mui/material'
-import ChatIcon from '@mui/icons-material/Chat'
-import TranslateIcon from '@mui/icons-material/Translate'
+import { Container, Box, Typography, Button, Paper, CircularProgress } from '@mui/material'
+import { useLanguage } from '../contexts/LanguageContext'
 
 const HomePage = () => {
   const navigate = useNavigate()
+  const { userLanguage } = useLanguage()
+  const [loading, setLoading] = useState(false)
+  
+  useEffect(() => {
+    // 如果用户已选择语言，直接进入聊天页面
+    if (userLanguage) {
+      navigate('/chat')
+    }
+  }, [userLanguage, navigate])
+
+  const handleStartChat = () => {
+    setLoading(true)
+    // 导航到语言选择页面
+    navigate('/language')
+  }
 
   return (
     <Container maxWidth="sm">
       <Box
         sx={{
+          height: '100vh',
           display: 'flex',
           flexDirection: 'column',
-          alignItems: 'center',
           justifyContent: 'center',
-          minHeight: '100vh',
-          py: 4,
+          alignItems: 'center',
           textAlign: 'center',
+          py: 4,
         }}
       >
-        <Paper
-          elevation={3}
+        <Paper 
+          elevation={3} 
           sx={{
             p: 4,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
             width: '100%',
             borderRadius: 2,
+            backgroundColor: 'white',
           }}
         >
           <Typography variant="h4" component="h1" gutterBottom>
-            多语言聊天应用
+            欢迎使用多语言客服系统
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
+            选择您的语言，与我们的客服进行实时对话。我们支持多种语言的即时翻译。
           </Typography>
           
-          <Typography variant="body1" color="text.secondary" paragraph>
-            体验实时翻译功能，与全球用户无障碍沟通
-          </Typography>
-          
-          <Box sx={{ mt: 4, width: '100%', display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Button
-              variant="contained"
-              size="large"
-              startIcon={<TranslateIcon />}
-              fullWidth
-              onClick={() => navigate('/language')}
-            >
-              选择语言偏好
-            </Button>
-            
-            <Button
-              variant="outlined"
-              size="large"
-              startIcon={<ChatIcon />}
-              fullWidth
-              onClick={() => navigate('/chat')}
-            >
-              开始聊天
-            </Button>
-          </Box>
+          <Button
+            variant="contained"
+            size="large"
+            fullWidth
+            onClick={handleStartChat}
+            disabled={loading}
+            sx={{ py: 1.5 }}
+          >
+            {loading ? <CircularProgress size={24} color="inherit" /> : "开始对话"}
+          </Button>
         </Paper>
       </Box>
     </Container>

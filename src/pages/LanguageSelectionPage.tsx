@@ -1,129 +1,109 @@
-import { useContext } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import {
-  Box,
-  Button,
-  Container,
-  Typography,
-  Paper,
-  Grid,
-  Card,
-  CardContent,
-  CardActionArea,
-} from '@mui/material'
-import ArrowBackIcon from '@mui/icons-material/ArrowBack'
-import CheckCircleIcon from '@mui/icons-material/CheckCircle'
-import { LanguageContext } from '../contexts/LanguageContext'
+import { Container, Box, Typography, Button, Paper, Grid, CircularProgress } from '@mui/material'
+import { useLanguage } from '../contexts/LanguageContext'
 
-const languages = [
-  { code: 'zh', name: '中文', nativeName: '中文' },
+interface LanguageOption {
+  code: string
+  name: string
+  nativeName: string
+}
+
+const languages: LanguageOption[] = [
   { code: 'en', name: 'English', nativeName: 'English' },
-  { code: 'ja', name: 'Japanese', nativeName: '日本語' },
-  { code: 'ko', name: 'Korean', nativeName: '한국어' },
+  { code: 'zh', name: 'Chinese', nativeName: '中文' },
+  { code: 'es', name: 'Spanish', nativeName: 'Español' },
   { code: 'fr', name: 'French', nativeName: 'Français' },
   { code: 'de', name: 'German', nativeName: 'Deutsch' },
-  { code: 'es', name: 'Spanish', nativeName: 'Español' },
-  { code: 'it', name: 'Italian', nativeName: 'Italiano' },
+  { code: 'ja', name: 'Japanese', nativeName: '日本語' },
+  { code: 'ko', name: 'Korean', nativeName: '한국어' },
   { code: 'ru', name: 'Russian', nativeName: 'Русский' },
-  { code: 'pt', name: 'Portuguese', nativeName: 'Português' },
+  { code: 'ar', name: 'Arabic', nativeName: 'العربية' },
 ]
 
 const LanguageSelectionPage = () => {
   const navigate = useNavigate()
-  const { language, setLanguage } = useContext(LanguageContext)
+  const { setUserLanguage } = useLanguage()
+  const [selectedLanguage, setSelectedLanguage] = useState<string>('')
+  const [loading, setLoading] = useState(false)
 
-  const handleLanguageSelect = (langCode: string) => {
-    setLanguage(langCode)
-    // Optional: Navigate to chat after language selection
-    // navigate('/chat')
+  const handleLanguageSelect = (languageCode: string) => {
+    setSelectedLanguage(languageCode)
+  }
+
+  const handleContinue = () => {
+    if (selectedLanguage) {
+      setLoading(true)
+      // 设置用户语言并导航到聊天页面
+      setUserLanguage(selectedLanguage)
+      navigate('/chat')
+    }
   }
 
   return (
     <Container maxWidth="md">
       <Box
         sx={{
+          height: '100vh',
           display: 'flex',
           flexDirection: 'column',
+          justifyContent: 'center',
           py: 4,
-          minHeight: '100vh',
         }}
       >
-        <Button
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigate('/')}
-          sx={{ alignSelf: 'flex-start', mb: 3 }}
+        <Paper 
+          elevation={3} 
+          sx={{
+            p: 4,
+            borderRadius: 2,
+            backgroundColor: 'white',
+          }}
         >
-          返回
-        </Button>
-
-        <Paper elevation={3} sx={{ p: 4, borderRadius: 2 }}>
-          <Typography variant="h5" component="h1" gutterBottom>
-            选择您的首选语言
+          <Typography variant="h5" component="h1" gutterBottom textAlign="center">
+            请选择您的首选语言
           </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-            聊天信息将自动翻译成您选择的语言
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }} textAlign="center">
+            选择语言后，我们将提供该语言的实时翻译服务
           </Typography>
-
-          <Grid container spacing={2}>
-            {languages.map((lang) => (
-              <Grid item xs={6} sm={4} md={3} key={lang.code}>
-                <Card
-                  variant="outlined"
+          
+          <Grid container spacing={2} sx={{ mb: 4 }}>
+            {languages.map((language) => (
+              <Grid item xs={6} sm={4} key={language.code}>
+                <Button
+                  variant={selectedLanguage === language.code ? "contained" : "outlined"}
+                  fullWidth
+                  onClick={() => handleLanguageSelect(language.code)}
                   sx={{
-                    borderColor:
-                      language === lang.code ? 'primary.main' : 'divider',
-                    bgcolor:
-                      language === lang.code ? 'primary.lighter' : 'background.paper',
-                    position: 'relative',
+                    py: 1.5,
+                    justifyContent: 'flex-start',
+                    textAlign: 'left',
+                    borderRadius: 2,
                   }}
                 >
-                  <CardActionArea
-                    onClick={() => handleLanguageSelect(lang.code)}
-                    sx={{ p: 2 }}
-                  >
-                    <CardContent>
-                      <Typography
-                        variant="h6"
-                        component="div"
-                        align="center"
-                        gutterBottom
-                      >
-                        {lang.nativeName}
-                      </Typography>
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        align="center"
-                      >
-                        {lang.name !== lang.nativeName ? lang.name : ''}
-                      </Typography>
-                    </CardContent>
-                    {language === lang.code && (
-                      <CheckCircleIcon
-                        color="primary"
-                        sx={{
-                          position: 'absolute',
-                          top: 8,
-                          right: 8,
-                        }}
-                      />
-                    )}
-                  </CardActionArea>
-                </Card>
+                  <Box>
+                    <Typography variant="body1" fontWeight={500}>
+                      {language.nativeName}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {language.name}
+                    </Typography>
+                  </Box>
+                </Button>
               </Grid>
             ))}
           </Grid>
-        </Paper>
-
-        <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
+          
           <Button
             variant="contained"
             size="large"
-            onClick={() => navigate('/chat')}
+            fullWidth
+            disabled={!selectedLanguage || loading}
+            onClick={handleContinue}
+            sx={{ py: 1.5 }}
           >
-            继续
+            {loading ? <CircularProgress size={24} color="inherit" /> : "继续"}
           </Button>
-        </Box>
+        </Paper>
       </Box>
     </Container>
   )
