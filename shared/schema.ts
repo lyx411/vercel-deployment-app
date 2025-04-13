@@ -1,91 +1,85 @@
-import { pgTable, text, serial, timestamp, foreignKey, uuid, boolean } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod";
+/**
+ * 共享类型定义
+ */
 
-// Users table - 基于Supabase结构
-export const users = pgTable("users", {
-  id: uuid("id").primaryKey(),
-  name: text("name"),
-  business_type: text("business_type"),
-  business_intro: text("business_intro"),
-  avatar_url: text("avatar_url"),
-  created_at: timestamp("created_at").defaultNow(),
-});
-
-// Chat sessions table - 基于Supabase实际表结构
-export const chatSessions = pgTable("chat_sessions", {
-  id: uuid("id").primaryKey(),
-  host_id: uuid("host_id").notNull(),
-  guest_id: uuid("guest_id"),
-  created_at: timestamp("created_at").defaultNow(),
-  host_name: text("host_name"),
-  guest_name: text("guest_name"),
-  last_activity: timestamp("last_activity"),
-  has_unread: boolean("has_unread").default(false),
-});
-
-// Messages table - 基于数据库实际结构
-export const messages = pgTable("messages", {
-  id: serial("id").primaryKey(),
-  chat_session_id: uuid("chat_session_id").notNull(), // 聊天会话ID
-  content: text("content").notNull(),
-  sender_id: uuid("sender_id").notNull(), // 发送者ID
-  sender_name: text("sender_name"), // 发送者名称
-  is_host: boolean("is_host").notNull(), // 是否是主持人
-  timestamp: timestamp("timestamp").defaultNow(),
-  original_language: text("original_language"), // 原始语言
-  translated_content: text("translated_content"), // 翻译后的内容
-  translation_status: text("translation_status").default('pending'), // 翻译状态
-});
-
-// 插入模式定义
-export const insertUserSchema = createInsertSchema(users);
-// 不需要pick字段，因为createInsertSchema已经省略了id
-
-export const insertChatSessionSchema = createInsertSchema(chatSessions).pick({
-  host_id: true,
-  guest_id: true,
-  host_name: true,
-  guest_name: true,
-  has_unread: true,
-});
-
-export const insertMessageSchema = createInsertSchema(messages).pick({
-  chat_session_id: true,
-  content: true,
-  sender_id: true,
-  sender_name: true,
-  is_host: true,
-  original_language: true,
-  translation_status: true
-});
-
-// 类型定义
-export type User = typeof users.$inferSelect;
-export type InsertUser = Omit<User, 'id'>;
-
-export type ChatSession = typeof chatSessions.$inferSelect;
-export type InsertChatSession = z.infer<typeof insertChatSessionSchema>;
-
-export type Message = typeof messages.$inferSelect;
-export type InsertMessage = z.infer<typeof insertMessageSchema>;
-
-// 前端类型定义
+// 主机信息
 export interface HostInfo {
   id: string;
   name: string;
-  title: string;
-  url: string;
-  avatarUrl: string;
+  title?: string;
+  url?: string;
+  avatarUrl?: string;
 }
 
+// 消息
 export interface ChatMessage {
   id: number;
+  session_id: string;
   content: string;
-  sender: 'host' | 'guest';
-  timestamp: Date;
-  original_language?: string;
+  sender: 'user' | 'host'; // user 代表客户端用户，host 代表商家端用户
+  created_at: string;
+  updated_at: string;
+  host_id?: string;
+  read?: boolean;
+  
+  // 翻译相关字段
   translated_content?: string;
-  translation_status?: 'pending' | 'completed' | 'failed';
-  showTranslated?: boolean; // 客户端状态，控制显示原文还是译文
+  original_language?: string;
+  target_language?: string;
+  translation_status?: 'pending' | 'processing' | 'completed' | 'error';
 }
+
+// 会话
+export interface ChatSession {
+  id: string;
+  host_id: string;
+  created_at: string;
+  updated_at: string;
+  status: 'active' | 'closed';
+  last_message_at?: string;
+  user_language?: string;
+}
+
+// 翻译请求
+export interface TranslationRequest {
+  action: 'translate';
+  source_text: string;
+  source_language?: string; // 可选，如果不提供则使用自动检测
+  target_language: string; // 目标语言代码
+  message_id?: number; // 如果是消息翻译，则提供消息ID
+}
+
+// 翻译响应
+export interface TranslationResponse {
+  action: 'translate_result';
+  translated_text: string;
+  detected_language?: string;
+  source_language: string;
+  target_language: string;
+  status: 'success' | 'error';
+  message_id?: number; // 如枟原请求提供了消息ID，则响应中也包含此ID
+  error?: string;
+}
+
+// WebSocket连接请求
+export interface WebSocketConnectRequest {
+  action: 'connect';
+  session_id: string;
+  user_language?: string; // 用户首选语言
+}
+
+// WebSocket状态响应
+export interface WebSocketStatusResponse {
+  action: 'connect_result' | 'heartbeat' | 'status';
+  status: 'connected' | 'error';
+  message?: string;
+  session_id?: string;
+  timestamp?: string;
+}
+
+// WebSocket消息类型
+export type WebSocketMessage =
+  | WebSocketConnectRequest
+  | WebSocketStatusResponse
+  | TranslationRequest
+  | TranslationResponse;
