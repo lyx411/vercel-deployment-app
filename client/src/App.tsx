@@ -5,6 +5,7 @@ import { queryClient } from './lib/queryClient';
 
 // Lazy load pages for better performance
 const ChatPage = lazy(() => import('./pages/ChatPage'));
+const StatusPage = lazy(() => import('./pages/StatusPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 function App() {
@@ -13,6 +14,7 @@ function App() {
       <Suspense fallback={<div className="loading">加载中...</div>}>
         <Switch>
           <Route path="/" component={ChatPage} />
+          <Route path="/status" component={StatusPage} />
           <Route component={NotFoundPage} />
         </Switch>
       </Suspense>
