@@ -19,11 +19,8 @@
       "dest": "server/index.ts"
     },
     {
-      "handle": "filesystem"
-    },
-    {
       "src": "/(.*)",
-      "dest": "/dist/public/index.html"
+      "dest": "/$1"
     }
   ],
   "env": {
