@@ -36,24 +36,8 @@ export default defineConfig({
       input: {
         main: path.resolve(__dirname, "client/index.html"),
       },
-      external: ['ws'],
-      onwarn(warning, warn) {
-        if (warning.code === 'MODULE_LEVEL_DIRECTIVE' || 
-            warning.code === 'THIS_IS_UNDEFINED' ||
-            warning.code === 'MISSING_EXPORT' ||
-            warning.code === 'CIRCULAR_DEPENDENCY') {
-          return;
-        }
-        warn(warning);
-      }
     },
-    target: 'es2018',
-    sourcemap: false
   },
   publicDir: path.resolve(__dirname, "client/public"),
-  appType: "spa",
-  define: {
-    'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(process.env.VITE_SUPABASE_URL || 'https://bazwlkkiodtuhepunqwz.supabase.co'),
-    'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(process.env.VITE_SUPABASE_ANON_KEY || '')
-  },
+  appType: "spa"
 });
