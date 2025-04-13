@@ -3,6 +3,7 @@ import { ChatMessage, HostInfo } from '@shared/schema';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Button } from '@/components/ui/button';
 import { Globe, Languages } from 'lucide-react';
+import { registerTranslationCallback, unregisterTranslationCallback } from '@/lib/supabase';
 
 interface TranslatableMessageProps {
   message: ChatMessage;
@@ -28,6 +29,23 @@ export function TranslatableMessage({ message, hostInfo }: TranslatableMessagePr
       console.log(`消息ID ${message.id} 翻译已更新并立即显示:`, message.translated_content);
     }
   }, [message.translation_status, message.translated_content, message.id]);
+  
+  // 注册翻译回调，当翻译完成时立即更新内容
+  useEffect(() => {
+    // 创建回调函数
+    const handleTranslationCompleted = (translatedContent: string) => {
+      console.log(`[回调] 消息ID ${message.id} 翻译完成，立即更新:`, translatedContent);
+      setLocalTranslatedContent(translatedContent);
+    };
+    
+    // 注册回调
+    registerTranslationCallback(message.id, handleTranslationCompleted);
+    
+    // 组件卸载时清理回调
+    return () => {
+      unregisterTranslationCallback(message.id, handleTranslationCompleted);
+    };
+  }, [message.id]); // 只在消息ID变化时重新注册
   
   // 是否是机器人/主机发送的消息
   const isHostMessage = message.sender === 'host';
@@ -56,22 +74,17 @@ export function TranslatableMessage({ message, hostInfo }: TranslatableMessagePr
     原始语言: message.original_language
   });
   
-  // 根据要求，在需要显示翻译时，不显示原文只显示翻译后的内容或什么都不显示
-  let displayContent;
+  // 根据要求，在需要显示翻译时，翻译未完成前不显示任何内容
+  let displayContent = null;
   if (isHostMessage && showTranslated) {
     // 主机消息需要翻译
     if (hasTranslation) {
-      // 翻译完成，显示翻译结果
+      // 翻译完成，显示翻译结果，优先使用本地状态中的翻译内容
       displayContent = localTranslatedContent || message.translated_content;
-    } else if (message.translation_status === 'pending') {
-      // 翻译中，显示原始内容，避免出现空气泡
-      displayContent = message.content;
-    } else {
-      // 翻译失败或未开始翻译，显示原文
-      displayContent = message.content;
     }
+    // 如果翻译未完成，displayContent保持为null，不显示任何内容
   } else {
-    // 不需要翻译的消息，显示原文
+    // 不需要翻译的消息（客人消息或不需要翻译的主机消息），显示原文
     displayContent = message.content;
   }
 
@@ -79,10 +92,8 @@ export function TranslatableMessage({ message, hostInfo }: TranslatableMessagePr
     <div className="relative group">
       {/* 消息内容 - 只有当displayContent不是null时才显示 */}
       {displayContent !== null && (
-        <div key={`message-${message.id}-${message.translation_status}`} className="whitespace-pre-wrap">{displayContent}</div>
+        <div key={`message-${message.id}-${message.translation_status}-${!!localTranslatedContent}`} className="whitespace-pre-wrap">{displayContent}</div>
       )}
-      
-      {/* 根据需求，移除翻译中的提示，不显示任何状态指示器 */}
     </div>
   );
 }
