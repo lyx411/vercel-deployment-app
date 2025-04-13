@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { ChatMessage, HostInfo } from '@shared/schema';
 
 // Check if Supabase is properly configured
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://bazwlkkiodtuhepunqwz.supabase.co';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://wanrxefvgarsndfceelf.supabase.co';
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 const isSupabaseConfigured = !!supabaseUrl && !!supabaseKey;
 
@@ -204,8 +204,8 @@ export async function getChatMessages(sessionId: string): Promise<ChatMessage[]>
     
     const { data, error } = await supabase
       .from('messages')
-      .select('id, session_id, content, sender, timestamp, translated_content, translation_status, original_language')
-      .eq('session_id', sessionId)
+      .select('id, chat_session_id, content, sender_id, sender_name, is_host, timestamp, translated_content, translation_status, original_language')
+      .eq('chat_session_id', sessionId)
       .order('timestamp', { ascending: true });
       
     if (error) {
@@ -229,7 +229,7 @@ export async function getChatMessages(sessionId: string): Promise<ChatMessage[]>
       return {
         id: msg.id,
         content: msg.content,
-        sender: msg.sender,
+        sender: msg.is_host ? 'host' : 'guest', // 根据is_host转换为sender格式
         timestamp: new Date(msg.timestamp),
         translated_content: translatedContent,
         translation_status: translationStatus,
@@ -293,11 +293,13 @@ export async function sendMessage(
       console.log('Generated fallback sender_id:', senderId);
     }
     
-    // Create message object
+    // Create message object with correct column names
     const message = {
-      session_id: sessionId,
+      chat_session_id: sessionId,
       content: content,
-      sender: sender
+      sender_id: senderId,
+      sender_name: isHost ? "客服" : "访客",
+      is_host: isHost
     };
     
     console.log('Sending message to Supabase:', message);
@@ -324,7 +326,7 @@ export async function sendMessage(
     return {
       id: data.id,
       content: data.content,
-      sender: data.sender,
+      sender: isHost ? 'host' : 'guest',
       timestamp: new Date(data.timestamp),
       translated_content: messageTranslations[`${data.id}`]?.translated_content,
       translation_status: messageTranslations[`${data.id}`]?.translation_status || 'pending'
@@ -357,8 +359,11 @@ export async function getOrCreateChatSession(merchantId: string): Promise<string
     try {
       // Define session data using fixed merchant ID rather than random generation
       const chatSession = {
-        session_id: sessionId,
-        host_id: merchantId
+        id: sessionId,
+        host_id: merchantId,
+        host_name: "客服",
+        guest_id: uuidv4(),
+        guest_name: "访客"
       };
       
       // Save host_id for later use
@@ -377,13 +382,15 @@ export async function getOrCreateChatSession(merchantId: string): Promise<string
         throw sessionError;
       }
       
-      console.log('Chat session created successfully:', sessionData?.session_id);
+      console.log('Chat session created successfully:', sessionData?.id);
       
       // Create welcome message
       const welcomeMessage = {
-        session_id: sessionId,
+        chat_session_id: sessionId,
         content: "您好！感谢扫描二维码开始对话。请问有什么可以帮到您的？", 
-        sender: "host"
+        sender_id: merchantId,
+        sender_name: "客服",
+        is_host: true
       };
       
       console.log('Creating initial welcome message for session:', welcomeMessage);
@@ -444,7 +451,7 @@ export function subscribeToMessages(
         event: 'INSERT',
         schema: 'public',
         table: 'messages',
-        filter: `session_id=eq.${sessionId}`,
+        filter: `chat_session_id=eq.${sessionId}`,
       },
       (payload) => {
         console.log('New message received from realtime subscription:', payload);
@@ -456,7 +463,7 @@ export function subscribeToMessages(
         const messageWithTranslation = {
           id: message.id,
           content: message.content,
-          sender: message.sender,
+          sender: message.is_host ? 'host' : 'guest',
           timestamp: new Date(message.timestamp),
           translated_content: cachedTranslation?.translated_content || message.translated_content,
           translation_status: cachedTranslation?.translation_status || message.translation_status || 'pending'
@@ -465,7 +472,7 @@ export function subscribeToMessages(
         callback(messageWithTranslation);
         
         // 如果是主机消息，自动触发翻译
-        if (message.sender === 'host') {
+        if (message.is_host) {
           translateMessage(message.id, message.content, 'auto', 'en')
             .catch(error => console.error('Failed to translate new host message:', error));
         }
