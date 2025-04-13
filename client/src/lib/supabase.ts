@@ -1,6 +1,7 @@
 import { ChatMessage, HostInfo } from '@shared/schema';
 import { v4 as uuidv4 } from 'uuid';
 import { createClient } from '@supabase/supabase-js';
+import { getWebSocketURL } from './getEnvironment';
 
 // 环境变量中获取Supabase配置
 export const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
@@ -23,8 +24,10 @@ const wsStatusListeners: ((status: typeof wsConnectionStatus) => void)[] = [];
 export let supabase: ReturnType<typeof createClient> | null = null;
 
 // 全局WebSocket连接
-let translateWs: WebSocket | null = null;
-let pingInterval: number | NodeJS.Timeout | null = null;
+let wsConnection: WebSocket | null = null;
+let heartbeatInterval: number | NodeJS.Timeout | null = null;
+let reconnectAttempts = 0;
+let currentSessionId: string | null = null;
 
 // 初始化Supabase客户端
 export function initSupabase() {
@@ -68,7 +71,13 @@ export function addWsStatusListener(callback: (status: typeof wsConnectionStatus
 }
 
 // 更新WebSocket状态并通知所有监听器
-function updateWsStatus(newStatus: typeof wsConnectionStatus) {
+function updateWsStatus(status: 'connected' | 'connecting' | 'disconnected', error: string | null = null) {
+  const newStatus = {
+    connected: status === 'connected',
+    connecting: status === 'connecting',
+    error
+  };
+  
   Object.assign(wsConnectionStatus, newStatus);
   
   // 通知所有监听器
@@ -77,17 +86,138 @@ function updateWsStatus(newStatus: typeof wsConnectionStatus) {
   });
 }
 
-// 初始化WebSocket
+// 初始化WebSocket连接
 export function initWebSocketConnection(sessionId: string, userLanguage?: string) {
-  // 使用模拟WebSocket提供基本功能
-  console.log('初始化模拟WebSocket连接');
+  // 保存当前会话ID
+  currentSessionId = sessionId;
   
-  setTimeout(() => {
-    updateWsStatus({ connected: true, connecting: false, error: null });
-    console.log('模拟WebSocket连接已建立');
-  }, 1000);
+  // 如果已经有连接，先关闭它
+  if (wsConnection && wsConnection.readyState !== WebSocket.CLOSED) {
+    console.log('关闭现有的WebSocket连接');
+    wsConnection.close();
+    if (heartbeatInterval) {
+      clearInterval(heartbeatInterval);
+      heartbeatInterval = null;
+    }
+  }
+
+  updateWsStatus('connecting');
+  reconnectAttempts = 0;
   
-  return true;
+  // 创建新的WebSocket连接
+  try {
+    // 获取WebSocket URL - 使用本地服务器的WebSocket端点
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host;
+    const wsUrl = `${protocol}//${host}/ws/translate`;
+    
+    console.log(`尝试连接到WebSocket URL: ${wsUrl}`);
+    
+    // 创建WebSocket连接
+    wsConnection = new WebSocket(wsUrl);
+    
+    // 连接成功事件
+    wsConnection.onopen = () => {
+      console.log('WebSocket连接已建立');
+      updateWsStatus('connected');
+      reconnectAttempts = 0;
+      
+      // 开始心跳检测
+      if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+      }
+      
+      heartbeatInterval = setInterval(() => {
+        if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
+          wsConnection.send(JSON.stringify({ type: 'ping', timestamp: new Date().toISOString() }));
+        }
+      }, 30000); // 每30秒发送一次心跳
+      
+      // 发送初始化消息
+      if (wsConnection) {
+        wsConnection.send(JSON.stringify({
+          type: 'init',
+          session_id: sessionId,
+          user_language: userLanguage || 'zh'
+        }));
+      }
+    };
+    
+    // 连接关闭事件
+    wsConnection.onclose = () => {
+      console.log('WebSocket连接已关闭');
+      updateWsStatus('disconnected');
+      
+      if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = null;
+      }
+      
+      // 尝试重新连接，最多尝试5次
+      if (reconnectAttempts < 5) {
+        reconnectAttempts++;
+        const delay = Math.min(1000 * reconnectAttempts, 5000);
+        
+        console.log(`将在${delay}毫秒后尝试重新连接(尝试 ${reconnectAttempts}/5)`);
+        
+        setTimeout(() => {
+          if (currentSessionId) {
+            initWebSocketConnection(currentSessionId, userLanguage);
+          }
+        }, delay);
+      } else {
+        console.log('达到最大重试次数，停止尝试重新连接');
+        updateWsStatus('disconnected', '无法建立WebSocket连接，请稍后再试');
+      }
+    };
+    
+    // 连接错误事件
+    wsConnection.onerror = (error) => {
+      console.error('WebSocket连接错误:', error);
+      updateWsStatus('disconnected', '连接出错，请刷新页面重试');
+    };
+    
+    // 接收消息事件
+    wsConnection.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        console.log('收到WebSocket消息:', message);
+        
+        // 处理不同类型的消息
+        switch (message.type) {
+          case 'pong':
+            // 心跳响应，无需特殊处理
+            break;
+            
+          case 'translation_complete':
+            // 处理翻译完成消息
+            if (message.messageId) {
+              messageTranslations[message.messageId] = {
+                translated_content: message.translation,
+                translation_status: 'completed'
+              };
+            }
+            break;
+            
+          case 'error':
+            console.error('WebSocket服务器错误:', message.error);
+            break;
+            
+          default:
+            // 处理其他类型的消息
+            break;
+        }
+      } catch (error) {
+        console.error('解析WebSocket消息时出错:', error);
+      }
+    };
+    
+    return true;
+  } catch (error) {
+    console.error('创建WebSocket连接失败:', error);
+    updateWsStatus('disconnected', '创建连接失败');
+    return false;
+  }
 }
 
 // 安全请求翻译
@@ -97,33 +227,75 @@ export async function translateMessage(
   sourceLanguage: string = 'auto',
   targetLanguage?: string
 ): Promise<boolean> {
-  console.log('模拟翻译请求:', { messageId, content, sourceLanguage, targetLanguage });
-  
-  // 存储一个模拟的翻译结果
-  setTimeout(() => {
-    const translatedContent = `[翻译] ${content}`;
-    messageTranslations[`${messageId}`] = {
-      translated_content: translatedContent,
-      translation_status: 'completed'
-    };
+  if (!wsConnection || wsConnection.readyState !== WebSocket.OPEN) {
+    console.warn('尝试发送翻译请求但WebSocket未连接');
     
-    console.log('模拟翻译完成:', translatedContent);
-  }, 1000);
+    // 尝试重新连接
+    if (currentSessionId) {
+      initWebSocketConnection(currentSessionId);
+    }
+    
+    // 返回假以指示请求未发送
+    return false;
+  }
   
-  return true;
+  try {
+    // 发送翻译请求
+    wsConnection.send(JSON.stringify({
+      type: 'translate',
+      message_id: messageId,
+      content,
+      source_language: sourceLanguage,
+      target_language: targetLanguage || 'zh'
+    }));
+    
+    return true;
+  } catch (error) {
+    console.error('发送翻译请求失败:', error);
+    return false;
+  }
 }
 
 // 获取主机信息
 export async function getHostInfo(userId: string): Promise<HostInfo | null> {
   console.log('获取主机信息:', userId);
   
-  return {
-    id: userId,
-    name: "商家",
-    business_type: "服务",
-    business_intro: "欢迎光临",
-    avatar_url: "https://ui-avatars.com/api/?name=商家&background=random&size=128",
-  };
+  if (!supabase) {
+    return {
+      id: userId,
+      name: "商家",
+      business_type: "服务",
+      business_intro: "欢迎光临",
+      avatar_url: "https://ui-avatars.com/api/?name=商家&background=random&size=128",
+    };
+  }
+  
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .single();
+    
+    if (error) {
+      throw error;
+    }
+    
+    if (!data) {
+      return null;
+    }
+    
+    return {
+      id: data.id,
+      name: data.name,
+      business_type: data.business_type || '',
+      business_intro: data.business_intro || '',
+      avatar_url: data.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(data.name)}&background=random&size=128`,
+    };
+  } catch (error) {
+    console.error('获取主机信息出错:', error);
+    return null;
+  }
 }
 
 // 获取聊天消息
@@ -291,11 +463,49 @@ export function subscribeToMessages(
   sessionId: string,
   callback: (message: ChatMessage) => void
 ) {
-  console.log('订阅消息更新 (模拟):', sessionId);
+  console.log('订阅消息更新:', sessionId);
   
-  // 无实际订阅功能，仅返回取消订阅函数
+  if (!supabase) {
+    console.warn('Supabase客户端未初始化，无法订阅实时更新');
+    return () => {};
+  }
+  
+  // 订阅消息表的插入事件
+  const subscription = supabase
+    .channel(`messages:${sessionId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `chat_session_id=eq.${sessionId}`
+      },
+      (payload) => {
+        console.log('收到实时消息更新:', payload);
+        
+        const message = payload.new;
+        if (message) {
+          const senderType = message.is_host ? ('host' as const) : ('guest' as const);
+          
+          callback({
+            id: message.id,
+            content: message.content,
+            sender: senderType,
+            timestamp: new Date(message.timestamp),
+            original_language: message.original_language || 'auto',
+            translated_content: message.translated_content,
+            translation_status: message.translation_status || 'pending'
+          });
+        }
+      }
+    )
+    .subscribe();
+  
+  // 返回取消订阅函数
   return () => {
     console.log('取消订阅消息更新');
+    supabase?.removeChannel(subscription);
   };
 }
 
