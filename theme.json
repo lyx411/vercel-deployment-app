@@ -1,6 +1,4 @@
 {
-  "variant": "professional",
-  "primary": "#4F46E5",
-  "appearance": "light",
-  "radius": 1
+  "light": "color-scheme: light; blue: 228 96% 89%;",
+  "dark": "color-scheme: dark; blue: 228 96% 89%;"
 }
