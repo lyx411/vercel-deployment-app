@@ -2,7 +2,7 @@ import express from 'express';
 import { config } from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import setupRoutes from './routes.js';
+import setupRoutes from './routes';
 
 // 加载环境变量
 config();
