@@ -1,12 +1,13 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import { shadcnThemeJSON } from '@replit/vite-plugin-shadcn-theme-json';
+// 修正导入方式
+import shadcnPlugin from '@replit/vite-plugin-shadcn-theme-json';
 
 export default defineConfig({
   plugins: [
     react(),
-    shadcnThemeJSON(),
+    shadcnPlugin(),
   ],
   resolve: {
     alias: {
