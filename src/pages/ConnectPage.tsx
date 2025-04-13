@@ -10,6 +10,7 @@ import {
   Divider, 
   CircularProgress,
   IconButton,
+  Paper,
   InputAdornment
 } from '@mui/material';
 import { 
@@ -47,20 +48,24 @@ const ConnectPage = () => {
   // 多语言翻译
   const translations = {
     'zh-CN': {
-      languageSettings: '语言设置',
+      title: '语言设置',
       yourPreferredLanguage: '您熟悉的语言',
       allMessagesWillBeTranslated: '系统会自动将来自对方的消息翻译成您选择的语言',
       confirm: '确认',
       searchLanguage: '搜索语言...',
       connecting: '正在连接...',
+      detected: '系统已自动检测您的浏览器语言',
+      chooseAnother: '您可以选择其他的语言'
     },
     'en': {
-      languageSettings: 'Language Settings',
+      title: 'Language Settings',
       yourPreferredLanguage: 'Your preferred language',
       allMessagesWillBeTranslated: 'Messages from the other party will be translated to your selected language',
       confirm: 'Confirm',
       searchLanguage: 'Search languages...',
       connecting: 'Connecting...',
+      detected: 'System has automatically detected your browser language',
+      chooseAnother: 'You can choose another language'
     }
   };
   
@@ -78,16 +83,16 @@ const ConnectPage = () => {
     setSelectedLanguage(langCode);
   };
   
-  // 确认语言选择
+  // 确认语言选择并进入聊天
   const handleConfirmLanguage = () => {
     setUserLanguage(selectedLanguage);
     setLoading(true);
     
     // 延时模拟连接过程
     setTimeout(() => {
-      // 导航到聊天页面
+      // 导航到聊天页面，携带会话ID
       navigate(sessionId ? `/chat/${sessionId}` : `/chat/mock-session-${Date.now()}`);
-    }, 1500);
+    }, 1000);
   };
 
   return (
@@ -95,132 +100,156 @@ const ConnectPage = () => {
       height: '100vh',
       width: '100%',
       display: 'flex',
-      flexDirection: 'column',
-      bgcolor: '#f8f9fa'
+      alignItems: 'center',
+      justifyContent: 'center',
+      bgcolor: '#1a1a1a80',
+      p: 2
     }}>
-      {/* 标题栏 */}
-      <Box sx={{
-        bgcolor: '#4a6bff',
-        color: 'white',
-        p: 2,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between'
-      }}>
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <TranslateIcon sx={{ mr: 1 }} />
-          <Typography variant="h6" sx={{ fontWeight: 500 }}>
-            {t.languageSettings}
-          </Typography>
-        </Box>
-        <IconButton 
-          color="inherit"
-          onClick={() => navigate('/')}
-          sx={{ p: 1 }}
-        >
-          <CloseIcon />
-        </IconButton>
-      </Box>
-
-      {loading ? (
+      <Paper 
+        elevation={3} 
+        sx={{ 
+          width: '100%', 
+          maxWidth: 400, 
+          borderRadius: 2,
+          overflow: 'hidden'
+        }}
+      >
+        {/* 标题栏 */}
         <Box sx={{
+          bgcolor: 'primary.main',
+          color: 'white',
+          p: 2,
           display: 'flex',
-          flexDirection: 'column',
           alignItems: 'center',
-          justifyContent: 'center',
-          flexGrow: 1
+          justifyContent: 'space-between'
         }}>
-          <CircularProgress size={60} thickness={4} />
-          <Typography variant="h6" sx={{ mt: 3 }}>
-            {t.connecting}
-          </Typography>
-        </Box>
-      ) : (
-        <>
-          {/* 语言选择内容 */}
-          <Box sx={{ p: 2, pb: 0 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 500, mb: 1, color: '#333' }}>
-              {t.yourPreferredLanguage}
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <TranslateIcon sx={{ mr: 1 }} />
+            <Typography variant="h6" sx={{ fontWeight: 500 }}>
+              {t.title}
             </Typography>
-            
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              {t.allMessagesWillBeTranslated}
-            </Typography>
-
-            <TextField
-              fullWidth
-              variant="outlined"
-              placeholder={t.searchLanguage}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              sx={{ mb: 2 }}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon />
-                  </InputAdornment>
-                ),
-                sx: { borderRadius: 1 }
-              }}
-            />
           </Box>
+          <IconButton 
+            color="inherit"
+            onClick={() => navigate('/')}
+            sx={{ p: 1 }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </Box>
 
-          {/* 语言列表 */}
-          <Box sx={{ flexGrow: 1, overflow: 'auto', px: 0 }}>
-            <List disablePadding>
-              {filteredLanguages.map((language, index) => (
-                <Box key={language.code}>
-                  <ListItem 
-                    button
-                    selected={selectedLanguage === language.code}
-                    onClick={() => handleLanguageSelect(language.code)}
-                    sx={{
-                      py: 1.5,
-                      px: 2,
-                      '&.Mui-selected': {
-                        bgcolor: 'rgba(74, 107, 255, 0.08)',
-                        '&:hover': {
-                          bgcolor: 'rgba(74, 107, 255, 0.12)',
-                        }
-                      }
-                    }}
-                  >
-                    <ListItemText 
-                      primary={language.nativeName} 
-                      secondary={language.code === 'zh-CN' ? 'Chinese' : (
-                        language.code === 'en' ? 'English' : language.label.split(/(?=[A-Z])/)[0]
-                      )}
-                      primaryTypographyProps={{
-                        fontWeight: selectedLanguage === language.code ? 600 : 400
-                      }}
-                    />
-                    {selectedLanguage === language.code && (
-                      <Box 
-                        component="span" 
-                        sx={{ 
-                          ml: 1, 
-                          width: 20, 
-                          height: 20, 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          justifyContent: 'center',
-                          borderRadius: '50%',
-                          bgcolor: '#4a6bff',
-                          color: 'white'
+        {loading ? (
+          <Box sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            p: 6
+          }}>
+            <CircularProgress size={60} thickness={4} />
+            <Typography variant="h6" sx={{ mt: 3 }}>
+              {t.connecting}
+            </Typography>
+          </Box>
+        ) : (
+          <Box sx={{ p: 3 }}>
+            {/* 当前语言信息 */}
+            <Box sx={{ textAlign: 'center', mb: 3 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 500, mb: 1 }}>
+                {t.yourPreferredLanguage}
+              </Typography>
+              
+              <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                {availableLanguages.find(lang => lang.code === userLanguage)?.nativeName || '中文'}
+                {userLanguage === 'zh-CN' && ' (中文)'}
+                {userLanguage === 'en' && ' (English)'}
+              </Typography>
+              
+              <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
+                {t.detected}
+              </Typography>
+            </Box>
+            
+            {/* 语言选择 */}
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
+                {t.chooseAnother}
+              </Typography>
+              
+              <TextField
+                fullWidth
+                variant="outlined"
+                placeholder={t.searchLanguage}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                sx={{ mb: 2 }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon />
+                    </InputAdornment>
+                  ),
+                  sx: { borderRadius: 1 }
+                }}
+              />
+              
+              <Box sx={{ maxHeight: 220, overflow: 'auto', border: '1px solid #e0e0e0', borderRadius: 1 }}>
+                <List disablePadding>
+                  {filteredLanguages.map((language, index) => (
+                    <Box key={language.code}>
+                      <ListItem 
+                        button
+                        selected={selectedLanguage === language.code}
+                        onClick={() => handleLanguageSelect(language.code)}
+                        sx={{
+                          py: 1.5,
+                          '&.Mui-selected': {
+                            bgcolor: 'rgba(74, 107, 255, 0.08)',
+                            '&:hover': {
+                              bgcolor: 'rgba(74, 107, 255, 0.12)',
+                            }
+                          }
                         }}
                       >
-                        ✓
-                      </Box>
-                    )}
-                  </ListItem>
-                  {index < filteredLanguages.length - 1 && <Divider />}
-                </Box>
-              ))}
-            </List>
-          </Box>
-
-          {/* 确认按钮 */}
-          <Box sx={{ p: 2, borderTop: '1px solid #eaeaea' }}>
+                        <ListItemText 
+                          primary={language.nativeName} 
+                          secondary={language.code === 'zh-CN' ? 'Chinese' : (
+                            language.code === 'en' ? 'English' : language.label.split(/(?=[A-Z])/)[0]
+                          )}
+                          primaryTypographyProps={{
+                            fontWeight: selectedLanguage === language.code ? 600 : 400
+                          }}
+                        />
+                        {selectedLanguage === language.code && (
+                          <Box 
+                            component="span" 
+                            sx={{ 
+                              ml: 1, 
+                              width: 20, 
+                              height: 20, 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              justifyContent: 'center',
+                              borderRadius: '50%',
+                              bgcolor: 'primary.main',
+                              color: 'white'
+                            }}
+                          >
+                            ✓
+                          </Box>
+                        )}
+                      </ListItem>
+                      {index < filteredLanguages.length - 1 && <Divider />}
+                    </Box>
+                  ))}
+                </List>
+              </Box>
+            </Box>
+            
+            <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3, textAlign: 'center' }}>
+              {t.allMessagesWillBeTranslated}
+            </Typography>
+            
             <Button
               fullWidth
               variant="contained"
@@ -231,14 +260,15 @@ const ConnectPage = () => {
               sx={{ 
                 py: 1.5,
                 fontSize: '1rem',
-                fontWeight: 500
+                fontWeight: 500,
+                borderRadius: 6
               }}
             >
               {t.confirm}
             </Button>
           </Box>
-        </>
-      )}
+        )}
+      </Paper>
     </Box>
   );
 };

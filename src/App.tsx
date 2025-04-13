@@ -49,14 +49,16 @@ function App() {
       <LanguageProvider>
         <Router>
           <Routes>
+            {/* 生成QR码的页面 */}
             <Route path="/" element={<QRCodePage />} />
             <Route path="/qrcode" element={<QRCodePage />} />
-            <Route path="/qrcode/:sessionId" element={<QRCodePage />} />
-            <Route path="/chat/:sessionId" element={<ChatPage />} />
             
-            {/* 扫码后连接路由 */}
+            {/* 扫码后的路由 - 先选择语言，再进入聊天 */}
             <Route path="/connect/:sessionId" element={<ConnectPage />} />
             <Route path="/connect/user/:userId" element={<ConnectPage />} />
+            
+            {/* 聊天页面 */}
+            <Route path="/chat/:sessionId" element={<ChatPage />} />
           </Routes>
         </Router>
       </LanguageProvider>
