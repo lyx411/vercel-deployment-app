@@ -1,11 +1,20 @@
 {
   "version": 2,
-  "buildCommand": "npm run build:minimal",
-  "outputDirectory": "dist",
-  "framework": "vite",
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/index.js" },
-    { "source": "/(.*)", "destination": "/public/$1" },
-    { "source": "/(.*)", "destination": "/public/index.html" }
-  ]
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/node",
+      "config": {
+        "buildCommand": "npm run build"
+      }
+    }
+  ],
+  "routes": [
+    { "src": "/api/(.*)", "dest": "dist/index.js" },
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "dist/public/index.html" }
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  }
 }
