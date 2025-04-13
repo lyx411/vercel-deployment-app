@@ -1,92 +1,127 @@
-import React, { useEffect, useRef } from 'react';
-import { formatMessageTime } from '../lib/utils';
-
-interface Message {
-  id: string;
-  content: string;
-  translated_content?: string | null;
-  role: 'user' | 'host';
-  created_at: string;
-}
+import { useEffect, useRef } from 'react';
+import { ChatMessage, HostInfo } from '@shared/schema';
+import { TranslatableMessage } from './TranslatableMessage';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface MessageListProps {
-  messages: Message[];
-  loading?: boolean;
+  messages: ChatMessage[];
+  hostInfo: HostInfo;
 }
 
-export const MessageList: React.FC<MessageListProps> = ({ messages, loading = false }) => {
+export function MessageList({ messages, hostInfo }: MessageListProps) {
+  const { preferredLanguage } = useLanguage();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // 滚动到最新消息
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  // Format date to display in the chat
+  const formatMessageTime = (timestamp: string) => {
+    try {
+      const date = new Date(timestamp);
+      return new Intl.DateTimeFormat('default', {
+        hour: '2-digit',
+        minute: '2-digit'
+      }).format(date);
+    } catch (e) {
+      return '';
+    }
   };
 
+  // Scroll to bottom when new messages arrive
   useEffect(() => {
-    scrollToBottom();
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
 
+  // Show date divider if messages are from different days
+  const shouldShowDateDivider = (currentMsg: ChatMessage, prevMsg: ChatMessage | null) => {
+    if (!prevMsg) return true;
+    
+    const currentDate = new Date(currentMsg.created_at).toDateString();
+    const prevDate = new Date(prevMsg.created_at).toDateString();
+    
+    return currentDate !== prevDate;
+  };
+
+  // Format date for the divider
+  const formatDateDivider = (timestamp: string) => {
+    try {
+      const date = new Date(timestamp);
+      return new Intl.DateTimeFormat(preferredLanguage === 'auto' ? undefined : preferredLanguage, {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      }).format(date);
+    } catch (e) {
+      return '';
+    }
+  };
+
   return (
-    <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
-      {messages.length === 0 && !loading ? (
-        <div className="flex flex-col items-center justify-center h-full text-gray-500">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.5}
-            stroke="currentColor"
-            className="w-12 h-12 mb-2 text-gray-400"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z"
-            />
-          </svg>
-          <p>开始聊天吧！</p>
+    <div className="p-4 space-y-4">
+      {messages.length === 0 ? (
+        <div className="text-center text-gray-500 py-6">
+          {preferredLanguage === 'zh' && '还没有消息，发送一条开始聊天吧！'}
+          {preferredLanguage === 'en' && 'No messages yet. Send one to start the conversation!'}
+          {preferredLanguage === 'ja' && 'まだメッセージはありません。会話を始めるにはメッセージを送信してください！'}
+          {preferredLanguage === 'ko' && '아직 메시지가 없습니다. 대화를 시작하려면 메시지를 보내보세요!'}
+          {!['zh', 'en', 'ja', 'ko'].includes(preferredLanguage) && 'No messages yet. Send one to start the conversation!'}
         </div>
       ) : (
-        <div className="space-y-4">
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
-              <div
-                className={`max-w-[80%] rounded-lg px-4 py-2 ${message.role === 'user'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-white border border-gray-200'}`}
-              >
-                <div className="text-sm mb-1">
-                  {message.translated_content && message.role === 'host' ? (
-                    <p>{message.translated_content}</p>
-                  ) : (
-                    <p>{message.content}</p>
+        messages.map((message, index) => {
+          const prevMessage = index > 0 ? messages[index - 1] : null;
+          const showDateDivider = shouldShowDateDivider(message, prevMessage);
+          
+          return (
+            <div key={message.id}>
+              {showDateDivider && (
+                <div className="my-4 text-center">
+                  <div className="inline-block px-4 py-1 rounded-full bg-gray-100 text-gray-500 text-xs">
+                    {formatDateDivider(message.created_at)}
+                  </div>
+                </div>
+              )}
+              
+              <div className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[80%] ${message.sender === 'user' ? 'order-2' : 'order-1'}`}>
+                  {message.sender === 'host' && (
+                    <div className="flex items-center mb-1">
+                      <div className="w-6 h-6 rounded-full overflow-hidden mr-2">
+                        {hostInfo.avatarUrl ? (
+                          <img 
+                            src={hostInfo.avatarUrl} 
+                            alt={hostInfo.name} 
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-blue-100 text-blue-500 text-xs">
+                            {hostInfo.name.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-sm text-gray-600">{hostInfo.name}</span>
+                    </div>
                   )}
-                </div>
-                <div
-                  className={`text-xs text-right ${message.role === 'user' ? 'text-blue-200' : 'text-gray-400'}`}
-                >
-                  {formatMessageTime(message.created_at)}
-                </div>
-              </div>
-            </div>
-          ))}
-          {loading && (
-            <div className="flex justify-start">
-              <div className="bg-white border border-gray-200 rounded-lg px-4 py-2">
-                <div className="flex space-x-2">
-                  <div className="bg-gray-300 rounded-full h-2 w-2 animate-pulse"></div>
-                  <div className="bg-gray-300 rounded-full h-2 w-2 animate-pulse delay-100"></div>
-                  <div className="bg-gray-300 rounded-full h-2 w-2 animate-pulse delay-200"></div>
+                  
+                  <div className="flex items-end">
+                    <div
+                      className={`rounded-lg px-4 py-2 ${message.sender === 'user' ? 
+                        'bg-blue-500 text-white rounded-br-none' : 
+                        'bg-gray-100 text-gray-800 rounded-bl-none'}`}
+                    >
+                      <TranslatableMessage message={message} />
+                    </div>
+                    <span className="text-xs text-gray-500 ml-2">
+                      {formatMessageTime(message.created_at)}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
+          );
+        })
       )}
+      <div ref={messagesEndRef} />
     </div>
   );
-};
+}

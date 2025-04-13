@@ -1,77 +1,87 @@
-import React from 'react';
-import { ChatMessage, HostInfo } from '@shared/schema';
+import { useEffect, useState } from 'react';
+import { ChatMessage } from '@shared/schema';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { Button } from '@/components/ui/button';
-import { Globe, Languages } from 'lucide-react';
 
 interface TranslatableMessageProps {
   message: ChatMessage;
-  hostInfo?: HostInfo;
 }
 
-export function TranslatableMessage({ message, hostInfo }: TranslatableMessageProps) {
-  const {
-    translatedMessageIds,
-    toggleMessageTranslation,
-    autoTranslate,
-    preferredLanguage
-  } = useLanguage();
+export function TranslatableMessage({ message }: TranslatableMessageProps) {
+  const { preferredLanguage, translatedMessageIds, autoTranslate } = useLanguage();
+  const [translatedContent, setTranslatedContent] = useState<string | null>(message.translated_content || null);
+  const [translationStatus, setTranslationStatus] = useState<string>(message.translation_status || 'pending');
 
-  // 是否是机器人/主机发送的消息
-  const isHostMessage = message.sender === 'host';
+  // 注册回调以接收翻译更新
+  useEffect(() => {
+    const updateTranslation = (translation: string) => {
+      console.log(`TranslatableMessage: 收到消息 ${message.id} 的翻译更新`, translation);
+      setTranslatedContent(translation);
+      setTranslationStatus('completed');
+    };
 
-  // 是否是客人发送的消息
-  const isGuestMessage = message.sender === 'guest';
+    const registerCallback = async () => {
+      if (message.sender === 'host' && preferredLanguage !== 'auto') {
+        try {
+          // 动态导入翻译功能
+          const { registerTranslationCallback, unregisterTranslationCallback } = await import('@/lib/supabase');
+          
+          // 注册回调
+          console.log(`为消息 ${message.id} 注册翻译回调...`);
+          registerTranslationCallback(message.id, updateTranslation);
+          
+          return () => {
+            // 当组件卸载时取消注册
+            console.log(`为消息 ${message.id} 取消注册翻译回调...`);
+            unregisterTranslationCallback(message.id);
+          };
+        } catch (error) {
+          console.error('注册翻译回调时出错:', error);
+        }
+      }
+    };
 
-  // 判断是否显示翻译版本 - 应用自动翻译逻辑
-  // 只有主机消息需要翻译到客人语言，客人消息不需要翻译
-  const showTranslated = isHostMessage && autoTranslate;
+    registerCallback();
+  }, [message.id, preferredLanguage]);
 
-  // 判断消息是否有翻译内容和翻译是否完成
-  const hasTranslation = !!message.translated_content && message.translation_status === 'completed';
-
-
-  // 添加更详细的调试日志
-  console.log(`[TranslatableMessage] 消息ID ${message.id}:`, {
-    消息内容: message.content,
-    是主机消息: isHostMessage,
-    显示翻译: showTranslated,
-    有翻译: hasTranslation,
-    自动翻译开启: autoTranslate,
-    首选语言: preferredLanguage,
-    翻译内容: message.translated_content,
-    翻译状态: message.translation_status,
-    翻译集合包含: translatedMessageIds.has(message.id),
-    原始语言: message.original_language
-  });
-
-  // 根据要求，在需要显示翻译时，不显示原文只显示翻译后的内容或什么都不显示
-  let displayContent;
-  if (isHostMessage && showTranslated) {
-    // 主机消息需要翻译
-    if (hasTranslation) {
-      // 翻译完成，显示翻译结果
-      displayContent = message.translated_content;
-    } else if (message.translation_status === 'pending') {
-      // 翻译中，显示原始内容，避免出现空气泡
-      displayContent = message.content;
-    } else {
-      // 翻译失败或未开始翻译，显示原文
-      displayContent = message.content;
+  // 根据消息属性和用户设置决定显示原始内容还是翻译内容
+  const shouldShowTranslation = () => {
+    // 如果消息是自己发送的，则始终显示原始内容
+    if (message.sender === 'user') return false;
+    
+    // 如果首选语言是自动检测，则显示原始内容
+    if (preferredLanguage === 'auto') return false;
+    
+    // 如果有翻译内容且翻译已完成，则根据首选项显示
+    if (translatedContent && translationStatus === 'completed') {
+      // 返回是否自动翻译（如果没有特定为此消息设置翻译状态）
+      return autoTranslate || translatedMessageIds.has(message.id);
     }
-  } else {
-    // 不需要翻译的消息，显示原文
-    displayContent = message.content;
-  }
+    
+    // 默认使用原始内容
+    return false;
+  };
+
+  // 显示加载指示器或错误状态
+  const renderTranslationStatus = () => {
+    if (!translatedContent && translationStatus === 'pending' && message.sender === 'host' && preferredLanguage !== 'auto') {
+      return <div className="text-xs italic text-blue-500 mt-1">翻译中...</div>;
+    }
+    
+    if (translationStatus === 'error') {
+      return <div className="text-xs italic text-red-500 mt-1">翻译失败</div>;
+    }
+    
+    return null;
+  };
+
+  const displayContent = shouldShowTranslation() && translatedContent ? translatedContent : message.content;
 
   return (
-    <div className="relative group">
-      {/* 消息内容 - 只有当displayContent不是null时才显示 */}
-      {displayContent !== null && (
-        <div className="whitespace-pre-wrap">{displayContent}</div>
-      )}
-
-      {/* 根据需求，移除翻译中的提示，不显示任何状态指示器 */}
+    <div>
+      <div>
+        {displayContent}
+      </div>
+      {renderTranslationStatus()}
     </div>
   );
 }

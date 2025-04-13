@@ -1,72 +1,79 @@
-import React from 'react';
-import { SUPPORTED_LANGUAGES, useLanguage, LanguageCode } from '@/contexts/LanguageContext';
-import { Globe, Check } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-  DropdownMenuLabel
-} from '@/components/ui/dropdown-menu';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
+import { useState } from 'react';
+import { useLanguage, SUPPORTED_LANGUAGES, LanguageCode } from '@/contexts/LanguageContext';
+import { Globe } from 'lucide-react';
 
 export function LanguageSelector() {
-  const {
-    preferredLanguage,
-    setPreferredLanguage,
-    autoTranslate,
-    setAutoTranslate
-  } = useLanguage();
+  const { preferredLanguage, setPreferredLanguage, autoTranslate, setAutoTranslate } = useLanguage();
+  const [isOpen, setIsOpen] = useState(false);
 
-  const handleLanguageChange = (lang: LanguageCode) => {
-    setPreferredLanguage(lang);
+  const toggleDropdown = () => {
+    setIsOpen(!isOpen);
+  };
+
+  const selectLanguage = (code: LanguageCode) => {
+    setPreferredLanguage(code);
+    setIsOpen(false);
+  };
+
+  const toggleAutoTranslate = () => {
+    setAutoTranslate(!autoTranslate);
   };
 
   return (
-    <div className="flex items-center">
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" className="flex items-center gap-1 px-2">
-            <Globe className="h-4 w-4" />
-            <span className="hidden sm:inline-block">{SUPPORTED_LANGUAGES[preferredLanguage]}</span>
+    <div className="relative">
+      <button
+        onClick={toggleDropdown}
+        className="flex items-center space-x-1 text-blue-600 hover:text-blue-800 transition-colors"
+      >
+        <Globe className="w-4 h-4" />
+        <span className="text-sm">
+          {SUPPORTED_LANGUAGES[preferredLanguage]}
+        </span>
+      </button>
 
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuLabel>选择语言 / Language</DropdownMenuLabel>
-
-          <DropdownMenuSeparator />
-
-          {Object.entries(SUPPORTED_LANGUAGES).map(([code, name]) => (
-            <DropdownMenuItem
-              key={code}
-              onClick={() => handleLanguageChange(code as LanguageCode)}
-              className="flex items-center justify-between"
-            >
-              <span>{name}</span>
-              {code === preferredLanguage && <Check className="h-4 w-4 ml-2" />}
-            </DropdownMenuItem>
-          ))}
-
-          <DropdownMenuSeparator />
-
+      {isOpen && (
+        <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg overflow-hidden z-20">
           <div className="p-2">
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="auto-translate"
-                checked={autoTranslate}
-                onCheckedChange={setAutoTranslate}
-              />
-              <Label htmlFor="auto-translate" className="text-sm">
-                自动翻译全部消息
-              </Label>
+            <p className="text-xs text-gray-500 mb-2">
+              {preferredLanguage === 'zh' && '选择语言'}
+              {preferredLanguage === 'en' && 'Select language'}
+              {preferredLanguage === 'ja' && '言語を選択'}
+              {preferredLanguage === 'ko' && '언어 선택'}
+              {!['zh', 'en', 'ja', 'ko'].includes(preferredLanguage) && 'Select language'}
+            </p>
+            
+            <div className="space-y-1 max-h-64 overflow-y-auto">
+              {Object.entries(SUPPORTED_LANGUAGES).map(([code, name]) => (
+                <button
+                  key={code}
+                  onClick={() => selectLanguage(code as LanguageCode)}
+                  className={`text-sm w-full text-left px-2 py-1 rounded ${preferredLanguage === code ? 'bg-blue-100 text-blue-700' : 'hover:bg-gray-100'}`}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-2 pt-2 border-t">
+              <label className="flex items-center space-x-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={autoTranslate}
+                  onChange={toggleAutoTranslate}
+                  className="rounded text-blue-600 focus:ring-blue-500"
+                />
+                <span>
+                  {preferredLanguage === 'zh' && '自动翻译'}
+                  {preferredLanguage === 'en' && 'Auto translate'}
+                  {preferredLanguage === 'ja' && '自動翻訳'}
+                  {preferredLanguage === 'ko' && '자동 번역'}
+                  {!['zh', 'en', 'ja', 'ko'].includes(preferredLanguage) && 'Auto translate'}
+                </span>
+              </label>
             </div>
           </div>
-        </DropdownMenuContent>
-      </DropdownMenu>
+        </div>
+      )}
     </div>
   );
 }
