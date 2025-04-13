@@ -1,56 +1,99 @@
-# 多语言实时通讯应用 - Vercel部署包
+# Vercel Deployment App
 
-## 部署步骤
+这是一个展示Vercel部署功能的演示应用，包含多语言聊天功能和实时翻译功能。
 
-1. 在Vercel上创建一个新项目
-2. 导入GitHub仓库或使用Vercel CLI上传此文件夹
-3. 配置以下环境变量:
-   - DATABASE_URL: 您的PostgreSQL数据库URL
-   - VITE_SUPABASE_URL: 您的Supabase项目URL
-   - VITE_SUPABASE_ANON_KEY: 您的Supabase匿名密钥
+## 功能
 
-## 重要说明
+- 实时聊天
+- 多语言支持
+- 自动翻译
+- WebSocket 实时更新
+- 提供 REST API 与 SQL 直接操作的同步实现
 
-- 此部署包针对Vercel平台进行了特别配置
-- 确保您的Supabase Edge Function已经部署并正确配置
-- 确保在Supabase项目的CORS设置中允许您的Vercel域名访问WebSocket
+## 技术栈
 
-## 部署指南
+- **前端**: React, TypeScript, Tailwind CSS, Vite
+- **后端**: Node.js, Express, Supabase
+- **实时通讯**: WebSocket
+- **部署**: Vercel
 
-### 方法1：使用Vercel CLI
+## 快速开始
 
-1. 安装Vercel CLI:
-   ```
-   npm install -g vercel
-   ```
+### 环境要求
 
-2. 在此文件夹中运行:
-   ```
-   vercel
-   ```
+- Node.js 18.0.0+
+- npm 或 yarn
 
-3. 按照CLI提示完成部署过程
-4. 配置环境变量
+### 安装依赖
 
-### 方法2：通过Vercel网站部署
+```bash
+npm install
+# 或
+yarn install
+```
 
-1. 将此文件夹上传到GitHub仓库
-2. 在Vercel控制面板中创建新项目
-3. 导入您的GitHub仓库
-4. 配置环境变量
-5. 部署配置：
-   - 构建命令: npm run build
-   - 输出目录: dist
-   - 开发命令: npm run dev
-6. 点击"Deploy"按钮
+### 启动开发服务器
 
-## 验证部署
+```bash
+npm run dev
+# 或
+yarn dev
+```
 
-1. 部署完成后，访问Vercel提供的URL
-2. 打开浏览器开发者工具，检查控制台输出
-3. 您应该能看到"WebSocket连接已建立"的消息
-4. 测试不同语言的消息翻译功能
+### 构建生产版本
 
-## 技术支持
+```bash
+npm run build
+# 或
+yarn build
+```
 
-如有任何问题，请联系开发者。
+## 部署
+
+查看 `VERCEL-DEPLOYMENT-GUIDE.md` 文件了解如何在 Vercel 上部署这个应用。
+
+## 环境变量
+
+在 `.env` 文件中配置以下环境变量（参考 `.env.example`）：
+
+```
+# 数据库连接字符串
+DATABASE_URL=postgres://user:password@host:port/database
+
+# Supabase连接设置
+SUPABASE_URL=your-supabase-url
+SUPABASE_ANON_KEY=your-supabase-anon-key
+
+# 会话密钥
+SESSION_SECRET=your-session-secret-at-least-32-characters-long
+```
+
+## 项目结构
+
+```
+/
+├── client/         # 前端代码
+│   ├── src/          # 源代码
+│   │   ├── components/  # React 组件
+│   │   ├── contexts/    # React 上下文
+│   │   ├── hooks/       # 自定义 Hooks
+│   │   ├── lib/         # 工具函数和 API 客户端
+│   │   ├── pages/       # 页面组件
+│   │   ├── App.tsx      # 主应用组件
+│   │   └── main.tsx      # 应用入口点
+│   └── public/       # 静态资源
+├── server/         # 后端代码
+│   ├── index.ts      # 服务器入口点
+│   └── routes.ts     # API 路由
+├── shared/         # 前后端共享代码
+│   └── schema.ts     # 类型定义
+├── .env.example    # 环境变量示例
+├── package.json     # 项目配置和依赖
+├── tsconfig.json    # TypeScript 配置
+├── vite.config.ts   # Vite 配置
+└── vercel.json      # Vercel 部署配置
+```
+
+## 许可证
+
+MIT
