@@ -1,236 +1,261 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useContext } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Container, Typography, Box, Paper, TextField, IconButton, Avatar, List, ListItem, ListItemText, ListItemAvatar, Divider, AppBar, Toolbar, CircularProgress } from '@mui/material'
+import {
+  Box,
+  Container,
+  Paper,
+  Typography,
+  TextField,
+  Button,
+  IconButton,
+  Divider,
+  Avatar,
+  CircularProgress,
+} from '@mui/material'
 import SendIcon from '@mui/icons-material/Send'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
-import TranslateIcon from '@mui/icons-material/Translate'
+import { LanguageContext } from '../contexts/LanguageContext'
 
+// 模拟数据 - 实际应用中应连接到后端服务
+// 消息类型定义
 interface Message {
-  id: number
+  id: string
   text: string
-  translation: string
-  sender: 'user' | 'other'
+  translatedText?: string
+  sender: 'user' | 'system'
   timestamp: Date
+  isTranslating?: boolean
 }
 
 const ChatPage = () => {
   const navigate = useNavigate()
-  const [message, setMessage] = useState('')
+  const { language } = useContext(LanguageContext)
   const [messages, setMessages] = useState<Message[]>([])
-  const [loading, setLoading] = useState(false)
-  const endOfMessagesRef = useRef<HTMLDivElement>(null)
-  const [preferredLanguage, setPreferredLanguage] = useState('zh')
+  const [newMessage, setNewMessage] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const messagesEndRef = useRef<null | HTMLDivElement>(null)
 
+  // 自动滚动到最新消息
   useEffect(() => {
-    const storedLanguage = localStorage.getItem('preferredLanguage')
-    if (storedLanguage) {
-      setPreferredLanguage(storedLanguage)
-    }
-
-    // 加载测试数据
-    setMessages([
-      {
-        id: 1,
-        text: 'Hello, how are you today?',
-        translation: '你好，你今天怎么样？',
-        sender: 'other',
-        timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000)
-      },
-      {
-        id: 2,
-        text: '我很好，谢谢关心！',
-        translation: 'I\'m fine, thank you for asking!',
-        sender: 'user',
-        timestamp: new Date(Date.now() - 23 * 60 * 60 * 1000)
-      },
-    ])
-  }, [])
-
-  useEffect(() => {
-    scrollToBottom()
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const scrollToBottom = () => {
-    endOfMessagesRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
+  // 模拟初始消息
+  useEffect(() => {
+    const welcomeMessage: Message = {
+      id: 'welcome-1',
+      text: `Welcome to the multilingual chat! You've selected ${language} as your preferred language.`,
+      translatedText: language === 'zh' ? '欢迎使用多语言聊天！您已选择中文作为首选语言。' : undefined,
+      sender: 'system',
+      timestamp: new Date(),
+    }
+    setMessages([welcomeMessage])
+  }, [language])
 
-  const handleSendMessage = async () => {
-    if (!message.trim()) return
+  const handleSendMessage = () => {
+    if (!newMessage.trim()) return
 
-    const newMessage: Message = {
-      id: Date.now(),
-      text: message,
-      translation: '',
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      text: newMessage,
       sender: 'user',
-      timestamp: new Date()
+      timestamp: new Date(),
     }
 
-    setMessages([...messages, newMessage])
-    setMessage('')
-    setLoading(true)
+    setMessages((prev) => [...prev, userMessage])
+    setNewMessage('')
+    setIsLoading(true)
 
-    // 模拟翻译请求
+    // 模拟响应
     setTimeout(() => {
-      setMessages(prev => {
-        const updated = [...prev]
-        const lastMsg = updated[updated.length - 1]
-        if (lastMsg) {
-          lastMsg.translation = `Translated: ${lastMsg.text}`
-        }
-        return updated
-      })
-      
-      // 模拟接收回复
-      setTimeout(() => {
-        const reply: Message = {
-          id: Date.now(),
-          text: 'This is an automated response.',
-          translation: '这是一个自动回复。',
-          sender: 'other',
-          timestamp: new Date()
-        }
-        setMessages(prev => [...prev, reply])
-        setLoading(false)
-      }, 1000)
-      
-    }, 1500)
+      const responseMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: `I received your message: "${newMessage}". This is an automated response.`,
+        translatedText: language === 'zh' ? `我收到了您的消息："${newMessage}"。这是一个自动响应。` : undefined,
+        sender: 'system',
+        timestamp: new Date(),
+        isTranslating: language !== 'en',
+      }
+
+      setMessages((prev) => [...prev, responseMessage])
+      setIsLoading(false)
+
+      // 模拟翻译完成
+      if (language !== 'en') {
+        setTimeout(() => {
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === responseMessage.id
+                ? { ...msg, isTranslating: false }
+                : msg
+            )
+          )
+        }, 1500)
+      }
+    }, 1000)
   }
 
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  // 处理按Enter发送消息
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSendMessage()
+    }
   }
 
   return (
-    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <AppBar position="static" color="primary" elevation={0}>
-        <Toolbar>
+    <Container maxWidth="md" sx={{ height: '100vh', py: 2 }}>
+      <Paper
+        elevation={3}
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+          borderRadius: 2,
+          overflow: 'hidden',
+        }}
+      >
+        {/* 聊天头部 */}
+        <Box
+          sx={{
+            p: 2,
+            backgroundColor: 'primary.main',
+            color: 'white',
+            display: 'flex',
+            alignItems: 'center',
+          }}
+        >
           <IconButton
-            edge="start"
             color="inherit"
             onClick={() => navigate('/')}
-            sx={{ mr: 2 }}
+            sx={{ mr: 1 }}
           >
             <ArrowBackIcon />
           </IconButton>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            聊天室
+          <Typography variant="h6" component="div">
+            多语言聊天
           </Typography>
-          <IconButton
-            color="inherit"
-            onClick={() => navigate('/language')}
-          >
-            <TranslateIcon />
-          </IconButton>
-        </Toolbar>
-      </AppBar>
+        </Box>
 
-      <Box sx={{ flexGrow: 1, overflow: 'auto', p: 2, backgroundColor: '#f5f5f5' }}>
-        <List>
-          {messages.map((msg, index) => (
-            <Box key={msg.id}>
-              {index > 0 && (
-                <Box sx={{ textAlign: 'center', my: 2 }}>
-                  <Typography variant="caption" color="text.secondary">
-                    {new Date(msg.timestamp).toLocaleDateString() !== 
-                     new Date(messages[index - 1].timestamp).toLocaleDateString() 
-                      ? new Date(msg.timestamp).toLocaleDateString()
-                      : ''}
-                  </Typography>
-                </Box>
-              )}
-              <ListItem
-                alignItems="flex-start"
-                sx={{
-                  display: 'flex',
-                  flexDirection: msg.sender === 'user' ? 'row-reverse' : 'row',
-                  mb: 1,
-                }}
-              >
-                <ListItemAvatar sx={{ minWidth: msg.sender === 'user' ? '0px' : '40px' }}>
-                  {msg.sender === 'other' && (
-                    <Avatar sx={{ bgcolor: msg.sender === 'user' ? 'primary.main' : 'secondary.main' }}>
-                      {msg.sender === 'user' ? 'U' : 'O'}
-                    </Avatar>
-                  )}
-                </ListItemAvatar>
-                <Paper
-                  elevation={1}
+        <Divider />
+
+        {/* 消息区域 */}
+        <Box
+          sx={{
+            flex: 1,
+            overflow: 'auto',
+            p: 2,
+            backgroundColor: '#f5f5f5',
+          }}
+        >
+          {messages.map((message) => (
+            <Box
+              key={message.id}
+              sx={{
+                display: 'flex',
+                justifyContent:
+                  message.sender === 'user' ? 'flex-end' : 'flex-start',
+                mb: 2,
+              }}
+            >
+              {message.sender === 'system' && (
+                <Avatar
                   sx={{
-                    p: 2,
-                    borderRadius: 2,
-                    maxWidth: '70%',
-                    backgroundColor: msg.sender === 'user' ? '#e3f2fd' : 'white',
-                    ml: msg.sender === 'user' ? 1 : 0,
-                    mr: msg.sender === 'other' ? 1 : 0,
+                    bgcolor: 'primary.main',
+                    width: 36,
+                    height: 36,
+                    mr: 1,
                   }}
                 >
-                  <ListItemText
-                    primary={msg.text}
-                    secondary={
-                      <>
-                        {msg.translation && (
-                          <Typography
-                            variant="body2"
-                            color="text.secondary"
-                            component="span"
-                            sx={{ display: 'block', mt: 1, fontStyle: 'italic' }}
-                          >
-                            {msg.translation}
-                          </Typography>
-                        )}
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          component="span"
-                          sx={{ display: 'block', mt: 1, textAlign: 'right' }}
-                        >
-                          {formatTime(new Date(msg.timestamp))}
-                        </Typography>
-                      </>
-                    }
-                  />
-                </Paper>
-                <ListItemAvatar sx={{ minWidth: msg.sender === 'other' ? '0px' : '40px' }}>
-                  {msg.sender === 'user' && (
-                    <Avatar sx={{ bgcolor: 'primary.main' }}>
-                      U
-                    </Avatar>
+                  S
+                </Avatar>
+              )}
+              <Paper
+                elevation={1}
+                sx={{
+                  p: 2,
+                  maxWidth: '70%',
+                  borderRadius: 2,
+                  backgroundColor:
+                    message.sender === 'user' ? 'primary.light' : 'white',
+                  color: message.sender === 'user' ? 'white' : 'inherit',
+                }}
+              >
+                <Typography variant="body1">
+                  {message.sender === 'system' && message.translatedText
+                    ? message.translatedText
+                    : message.text}
+                  {message.isTranslating && (
+                    <CircularProgress
+                      size={12}
+                      thickness={6}
+                      sx={{ ml: 1, verticalAlign: 'middle' }}
+                    />
                   )}
-                </ListItemAvatar>
-              </ListItem>
+                </Typography>
+                <Typography
+                  variant="caption"
+                  display="block"
+                  sx={{
+                    mt: 0.5,
+                    opacity: 0.7,
+                    textAlign: message.sender === 'user' ? 'right' : 'left',
+                  }}
+                >
+                  {message.timestamp.toLocaleTimeString()}
+                </Typography>
+              </Paper>
+              {message.sender === 'user' && (
+                <Avatar
+                  sx={{
+                    bgcolor: 'secondary.main',
+                    width: 36,
+                    height: 36,
+                    ml: 1,
+                  }}
+                >
+                  U
+                </Avatar>
+              )}
             </Box>
           ))}
-          {loading && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
-              <CircularProgress size={24} />
-            </Box>
-          )}
-          <div ref={endOfMessagesRef} />
-        </List>
-      </Box>
+          <div ref={messagesEndRef} />
+        </Box>
 
-      <Paper elevation={3} sx={{ p: 2, borderRadius: 0 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+        <Divider />
+
+        {/* 消息输入区 */}
+        <Box
+          sx={{
+            p: 2,
+            display: 'flex',
+            alignItems: 'center',
+          }}
+        >
           <TextField
             fullWidth
             variant="outlined"
-            placeholder={`用${preferredLanguage === 'zh' ? '中文' : '其他语言'}输入消息...`}
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-            size="small"
-            sx={{ mr: 1 }}
+            placeholder="输入消息..."
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+            onKeyPress={handleKeyPress}
+            disabled={isLoading}
+            multiline
+            maxRows={3}
+            sx={{ mr: 2 }}
           />
-          <IconButton
+          <Button
+            variant="contained"
             color="primary"
+            endIcon={<SendIcon />}
             onClick={handleSendMessage}
-            disabled={!message.trim() || loading}
+            disabled={isLoading || !newMessage.trim()}
           >
-            <SendIcon />
-          </IconButton>
+            发送
+          </Button>
         </Box>
       </Paper>
-    </Box>
+    </Container>
   )
 }
 
