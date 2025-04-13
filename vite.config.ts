@@ -45,21 +45,10 @@ export default defineConfig({
           return;
         }
         warn(warning);
-      },
-      output: {
-        format: 'es',
-        globals: {
-          'ws': 'WebSocket'
-        },
-        // 保证asset文件路径正确
-        assetFileNames: 'assets/[name].[hash].[ext]',
-        chunkFileNames: 'assets/[name].[hash].js',
-        entryFileNames: 'assets/[name].[hash].js'
       }
     },
     target: 'es2018',
-    sourcemap: false,
-    minify: 'terser'
+    sourcemap: false
   },
   publicDir: path.resolve(__dirname, "client/public"),
   appType: "spa",
