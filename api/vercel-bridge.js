@@ -15,6 +15,7 @@ module.exports = (req, res) => {
     status: 'online',
     service: 'vercel-bridge',
     timestamp: new Date().toISOString(),
-    requestUrl: req.url
+    requestUrl: req.url,
+    environment: process.env.VERCEL_ENV || 'development'
   });
 };
