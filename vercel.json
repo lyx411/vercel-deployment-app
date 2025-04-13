@@ -1,7 +1,8 @@
 {
   "version": 2,
-  "redirects": [
-    { "source": "/((?!api/).*)/(.*)", "destination": "/" }
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/server/index.ts" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ],
   "builds": [
     {
