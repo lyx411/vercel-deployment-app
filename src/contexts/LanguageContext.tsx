@@ -1,49 +1,69 @@
-import { createContext, useState, useContext, ReactNode, useEffect } from 'react'
+import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
 
 interface LanguageContextType {
-  userLanguage: string | null
-  setUserLanguage: (language: string) => void
+  userLanguage: string;
+  setUserLanguage: (language: string) => void;
+  isLoading: boolean;
 }
 
-const defaultValue: LanguageContextType = {
-  userLanguage: null,
-  setUserLanguage: () => {}
-}
-
-const LanguageContext = createContext<LanguageContextType>(defaultValue)
+const LanguageContext = createContext<LanguageContextType>({
+  userLanguage: 'zh-CN',
+  setUserLanguage: () => {},
+  isLoading: false
+});
 
 interface LanguageProviderProps {
-  children: ReactNode
+  children: ReactNode;
 }
 
 export const LanguageProvider = ({ children }: LanguageProviderProps) => {
-  // 发现如果某个语言已经在 localStorage 中设置
-  const [userLanguage, setUserLanguageState] = useState<string | null>(() => {
-    try {
-      const storedLanguage = localStorage.getItem('userLanguage')
-      return storedLanguage
-    } catch (e) {
-      console.error('Error accessing localStorage:', e)
-      return null
-    }
-  })
-  
-  // 当语言变化时将其保存到 localStorage
-  const setUserLanguage = (language: string) => {
-    try {
-      localStorage.setItem('userLanguage', language)
-      setUserLanguageState(language)
-    } catch (e) {
-      console.error('Error saving to localStorage:', e)
-      setUserLanguageState(language) // 仍然更新状态，即使无法持久化
-    }
-  }
-  
+  const [userLanguage, setUserLanguage] = useState('zh-CN');
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    // 获取浏览器语言
+    const detectLanguage = () => {
+      const savedLanguage = localStorage.getItem('userLanguage');
+      
+      if (savedLanguage) {
+        setUserLanguage(savedLanguage);
+      } else {
+        // 使用浏览器首选语言
+        const browserLanguage = navigator.language;
+        // 如果是中文或英文，直接使用，否则默认使用英文
+        if (browserLanguage.startsWith('zh')) {
+          setUserLanguage('zh-CN');
+        } else {
+          setUserLanguage('en');
+        }
+      }
+      
+      setIsLoading(false);
+    };
+
+    detectLanguage();
+  }, []);
+
+  // 设置用户语言偏好
+  const handleSetLanguage = (language: string) => {
+    setUserLanguage(language);
+    localStorage.setItem('userLanguage', language);
+  };
+
   return (
-    <LanguageContext.Provider value={{ userLanguage, setUserLanguage }}>
+    <LanguageContext.Provider 
+      value={{ 
+        userLanguage, 
+        setUserLanguage: handleSetLanguage,
+        isLoading
+      }}
+    >
       {children}
     </LanguageContext.Provider>
-  )
-}
+  );
+};
 
-export const useLanguage = () => useContext(LanguageContext)
+// 自定义Hook
+export const useLanguage = () => useContext(LanguageContext);
+
+export default LanguageContext;
