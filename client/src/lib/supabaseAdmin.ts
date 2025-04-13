@@ -1,17 +1,24 @@
 import { createClient } from '@supabase/supabase-js';
 
-// 为管理员操作（如创建用户）使用服务密钥
-const supabaseAdminUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseServiceKey = import.meta.env.SUPABASE_SERVICE_KEY || '';
+// 管理员权限Supabase客户端
+// 注意：这个文件只应该在服务器端使用，不要在客户端使用
 
-// 创建具有服务密钥的Supabase客户端，用于绕过RLS
-export const supabaseAdmin = (supabaseAdminUrl && supabaseServiceKey)
-  ? createClient(supabaseAdminUrl, supabaseServiceKey)
-  : null;
+// 环境变量会在构建时注入
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-// 日志记录用于调试
-if (supabaseAdmin) {
-  console.log('Supabase Admin client initialized successfully');
-} else {
-  console.log('Failed to initialize Supabase Admin client - missing URL or service key');
-}
+let supabaseAdmin: ReturnType<typeof createClient> | null = null;
+
+// 初始化Supabase管理员客户端
+export const getSupabaseAdmin = () => {
+  if (!supabaseAdmin && supabaseUrl && supabaseServiceKey) {
+    supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    });
+  }
+  
+  return supabaseAdmin;
+};
