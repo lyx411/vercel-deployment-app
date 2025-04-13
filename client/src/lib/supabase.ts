@@ -775,8 +775,8 @@ export async function translateMessage(
       } else if (finalTargetLanguage === 'zh' && translationMap['en'][translationKey]) {
         translatedContent = translationMap['en'][translationKey];
       } else {
-        // 如果没有找到映射，简单地在原文后添加一个标记
-        translatedContent = `${content} (${finalTargetLanguage === 'en' ? 'translated to English' : 'translated to Chinese'})`;
+        // 如果没有找到映射，简单地用原文，不添加额外文本
+        translatedContent = content;
       }
       
       // 模拟网络延迟
