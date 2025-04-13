@@ -1,79 +1,90 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
-import CssBaseline from '@mui/material/CssBaseline';
-import { LanguageProvider } from './contexts/LanguageContext';
-import { AuthProvider } from './contexts/AuthContext';
-import { ChatProvider } from './contexts/ChatContext';
-
-// 页面组件
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import ChatsListPage from './pages/ChatsListPage';
-import ChatPage from './pages/ChatPage';
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import QRCodePage from './pages/QRCodePage';
 import ConnectPage from './pages/ConnectPage';
+import './styles.css';
 
-// 创建主题
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: '#4a6bff',
-    },
-    background: {
-      default: '#f5f8fa',
-    },
-  },
-  typography: {
-    fontFamily: [
-      '-apple-system',
-      'BlinkMacSystemFont',
-      '"Segoe UI"',
-      'Roboto',
-      '"Helvetica Neue"',
-      'Arial',
-      'sans-serif',
-    ].join(','),
-  },
-  components: {
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          borderRadius: 8,
-          textTransform: 'none',
-          fontWeight: 500,
-        },
-      },
-    },
-  },
+interface User {
+  id: string;
+  name: string;
+}
+
+// 创建上下文
+export const AuthContext = React.createContext<{
+  user: User | null;
+  userLanguage: string;
+  setUserLanguage: (lang: string) => void;
+}>({
+  user: null,
+  userLanguage: 'zh-CN',
+  setUserLanguage: () => {},
 });
 
+// 定义语言上下文提供程序
+export const LanguageContext = React.createContext<{
+  userLanguage: string;
+  setUserLanguage: (lang: string) => void;
+}>({
+  userLanguage: 'zh-CN',
+  setUserLanguage: () => {},
+});
+
+// 聊天上下文（简化版）
+export const ChatContext = React.createContext<{}>({});
+
 function App() {
+  const [user, setUser] = useState<User | null>(null);
+  const [userLanguage, setUserLanguage] = useState('zh-CN');
+  const [loading, setLoading] = useState(true);
+
+  // 模拟用户登录
+  useEffect(() => {
+    // 模拟API调用
+    setTimeout(() => {
+      const mockUser = {
+        id: 'user123',
+        name: '测试用户',
+      };
+      setUser(mockUser);
+      setLoading(false);
+    }, 1000);
+  }, []);
+
+  if (loading) {
+    return <div className="loading-container">加载中...</div>;
+  }
+
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <LanguageProvider>
-        <AuthProvider>
-          <ChatProvider>
-            <Router>
-              <Routes>
-                <Route path="/" element={<ChatsListPage />} />
-                <Route path="/login" element={<LoginPage />} />
-                <Route path="/register" element={<RegisterPage />} />
-                <Route path="/chats" element={<ChatsListPage />} />
-                <Route path="/chat/:sessionId" element={<ChatPage />} />
-                <Route path="/qrcode" element={<QRCodePage />} />
-                <Route path="/qrcode/:sessionId" element={<QRCodePage />} />
-                
-                {/* 扫码后连接路由 */}
-                <Route path="/connect/:sessionId" element={<ConnectPage />} />
-                <Route path="/connect/user/:userId" element={<ConnectPage />} />
-              </Routes>
-            </Router>
-          </ChatProvider>
-        </AuthProvider>
-      </LanguageProvider>
-    </ThemeProvider>
+    <AuthContext.Provider value={{ user, userLanguage, setUserLanguage }}>
+      <LanguageContext.Provider value={{ userLanguage, setUserLanguage }}>
+        <ChatContext.Provider value={{}}>
+          <Router>
+            <Routes>
+              <Route path="/qrcode/:sessionId?" element={<QRCodePage />} />
+              <Route path="/connect/:sessionId" element={<ConnectPage />} />
+              <Route path="/connect/user/:userId" element={<ConnectPage />} />
+              <Route path="/" element={<Navigate to="/qrcode" replace />} />
+            </Routes>
+          </Router>
+        </ChatContext.Provider>
+      </LanguageContext.Provider>
+    </AuthContext.Provider>
   );
 }
+
+// 导出AuthContext的hook
+export const useAuth = () => {
+  return React.useContext(AuthContext);
+};
+
+// 导出LanguageContext的hook
+export const useLanguage = () => {
+  return React.useContext(LanguageContext);
+};
+
+// 导出ChatContext的hook
+export const useChat = () => {
+  return React.useContext(ChatContext);
+};
 
 export default App;
