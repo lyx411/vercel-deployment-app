@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ChatMessage, HostInfo } from '@shared/schema';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,18 @@ export function TranslatableMessage({ message, hostInfo }: TranslatableMessagePr
     preferredLanguage
   } = useLanguage();
   
+  // 增加本地state来跟踪翻译内容
+  const [localTranslatedContent, setLocalTranslatedContent] = useState<string | null>(message.translated_content);
+  
+  // 使用useEffect监听message的变化，特别是翻译状态的变化
+  useEffect(() => {
+    // 当翻译完成时，立即更新本地状态
+    if (message.translation_status === 'completed' && message.translated_content) {
+      setLocalTranslatedContent(message.translated_content);
+      console.log(`消息ID ${message.id} 翻译已更新并立即显示:`, message.translated_content);
+    }
+  }, [message.translation_status, message.translated_content, message.id]);
+  
   // 是否是机器人/主机发送的消息
   const isHostMessage = message.sender === 'host';
   
@@ -28,7 +40,7 @@ export function TranslatableMessage({ message, hostInfo }: TranslatableMessagePr
   const showTranslated = isHostMessage && autoTranslate;
   
   // 判断消息是否有翻译内容和翻译是否完成
-  const hasTranslation = !!message.translated_content && message.translation_status === 'completed';
+  const hasTranslation = !!(localTranslatedContent || message.translated_content) && message.translation_status === 'completed';
   
   // 添加更详细的调试日志
   console.log(`[TranslatableMessage] 消息ID ${message.id}:`, {
@@ -38,7 +50,7 @@ export function TranslatableMessage({ message, hostInfo }: TranslatableMessagePr
     有翻译: hasTranslation,
     自动翻译开启: autoTranslate,
     首选语言: preferredLanguage,
-    翻译内容: message.translated_content,
+    翻译内容: localTranslatedContent || message.translated_content,
     翻译状态: message.translation_status,
     翻译集合包含: translatedMessageIds.has(message.id),
     原始语言: message.original_language
@@ -50,7 +62,7 @@ export function TranslatableMessage({ message, hostInfo }: TranslatableMessagePr
     // 主机消息需要翻译
     if (hasTranslation) {
       // 翻译完成，显示翻译结果
-      displayContent = message.translated_content;
+      displayContent = localTranslatedContent || message.translated_content;
     } else if (message.translation_status === 'pending') {
       // 翻译中，显示原始内容，避免出现空气泡
       displayContent = message.content;
@@ -67,7 +79,7 @@ export function TranslatableMessage({ message, hostInfo }: TranslatableMessagePr
     <div className="relative group">
       {/* 消息内容 - 只有当displayContent不是null时才显示 */}
       {displayContent !== null && (
-        <div className="whitespace-pre-wrap">{displayContent}</div>
+        <div key={`message-${message.id}-${message.translation_status}`} className="whitespace-pre-wrap">{displayContent}</div>
       )}
       
       {/* 根据需求，移除翻译中的提示，不显示任何状态指示器 */}
