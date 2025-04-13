@@ -1,23 +1,16 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "dist/server/index.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "dist/client/**",
-      "use": "@vercel/static"
-    }
-  ],
   "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "dist/server/index.js"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "dist/client/$1"
-    }
-  ]
+    { "src": "/api/(.*)", "dest": "/api/$1" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ],
+  "builds": [
+    { "src": "api/**/*.js", "use": "@vercel/node" },
+    { "src": "package.json", "use": "@vercel/static-build", "config": { "distDir": "dist" } }
+  ],
+  "env": {
+    "VITE_SUPABASE_URL": "@supabase_url",
+    "VITE_SUPABASE_ANON_KEY": "@supabase_anon_key",
+    "VITE_EDGE_FUNCTION_URL": "@edge_function_url"
+  }
 }
