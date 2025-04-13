@@ -26,6 +26,66 @@ export let supabase: ReturnType<typeof createClient> | null = null;
 let translateWs: WebSocket | null = null;
 let pingInterval: number | NodeJS.Timeout | null = null;
 
+// 支持的语言列表
+const supportedLanguages = ['en', 'zh-CN', 'ja', 'ko', 'es', 'fr', 'de', 'ru', 'ar', 'pt', 'it', 'zh-TW'];
+
+// 常用短语翻译映射表（用于快速响应无需调用API）
+const basicPhraseMap: Record<string, Record<string, string>> = {
+  'en': {
+    'Hello': 'Hello',
+    'Thank you': 'Thank you',
+    'Yes': 'Yes',
+    'No': 'No',
+    'Goodbye': 'Goodbye',
+    '你好': 'Hello',
+    '谢谢': 'Thank you',
+    '是的': 'Yes',
+    '不': 'No',
+    '再见': 'Goodbye'
+  },
+  'zh-CN': {
+    'Hello': '你好',
+    'Thank you': '谢谢',
+    'Yes': '是的',
+    'No': '不',
+    'Goodbye': '再见',
+    '你好': '你好',
+    '谢谢': '谢谢',
+    '是的': '是的',
+    '不': '不',
+    '再见': '再见'
+  }
+};
+
+// 检查是否为基本短语
+function isBasicPhrase(text: string): boolean {
+  // 先检查英文映射
+  if (basicPhraseMap['en'][text]) return true;
+  
+  // 再检查中文映射
+  if (basicPhraseMap['zh-CN'][text]) return true;
+  
+  return false;
+}
+
+// 获取基本短语的翻译
+function getBasicPhraseTranslation(text: string, targetLang: string): string | null {
+  // 检查目标语言是否支持
+  if (!basicPhraseMap[targetLang]) return null;
+  
+  // 先查找英文短语
+  if (basicPhraseMap['en'][text]) {
+    return basicPhraseMap[targetLang][text] || null;
+  }
+  
+  // 再查找中文短语
+  if (basicPhraseMap['zh-CN'][text]) {
+    return basicPhraseMap[targetLang][text] || null;
+  }
+  
+  return null;
+}
+
 // 初始化Supabase客户端
 export function initSupabase() {
   try {
@@ -68,7 +128,7 @@ export function addWsStatusListener(callback: (status: typeof wsConnectionStatus
 }
 
 // 更新WebSocket状态并通知所有监听器
-function updateWsStatus(newStatus: typeof wsConnectionStatus) {
+function updateWsStatus(newStatus: Partial<typeof wsConnectionStatus>) {
   Object.assign(wsConnectionStatus, newStatus);
   
   // 通知所有监听器
@@ -77,17 +137,143 @@ function updateWsStatus(newStatus: typeof wsConnectionStatus) {
   });
 }
 
+// 从WebSocket中安全解析JSON
+function safeParseJson(data: string) {
+  try {
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('WebSocket: Error parsing message data:', error);
+    return null;
+  }
+}
+
 // 初始化WebSocket
 export function initWebSocketConnection(sessionId: string, userLanguage?: string) {
-  // 使用模拟WebSocket提供基本功能
-  console.log('初始化模拟WebSocket连接');
+  if (wsConnectionStatus.connected || wsConnectionStatus.connecting) {
+    console.log('WebSocket: Already connected or connecting');
+    return true;
+  }
+
+  try {
+    // 在WebSocket服务器上提供的API路径
+    let wsUrl = `${supabaseUrl.replace('https://', 'wss://')}/translate-service/v1/ws`;
+    
+    // 添加会话信息作为URL参数
+    wsUrl += `?session_id=${encodeURIComponent(sessionId)}`;
+    if (userLanguage) {
+      wsUrl += `&lang=${encodeURIComponent(userLanguage)}`;
+    }
+    
+    // 更新WebSocket状态为连接中
+    updateWsStatus({ connecting: true, error: null });
+    
+    translateWs = new WebSocket(wsUrl);
+    
+    translateWs.onopen = () => {
+      // 连接建立成功
+      console.log('WebSocket: Connection established');
+      updateWsStatus({ connected: true, connecting: false, error: null });
+      
+      // 设置保持连接的ping间隔
+      if (pingInterval) {
+        clearInterval(pingInterval as NodeJS.Timeout);
+      }
+      
+      pingInterval = setInterval(() => {
+        if (translateWs && translateWs.readyState === WebSocket.OPEN) {
+          translateWs.send(JSON.stringify({ type: 'ping' }));
+        }
+      }, 30000); // 每30秒ping一次
+    };
+    
+    translateWs.onmessage = (event) => {
+      const data = safeParseJson(event.data);
+      if (!data) return;
+      
+      if (data.type === 'pong') {
+        // Ping-pong心跳响应
+        console.log('WebSocket: Received pong');
+        return;
+      }
+      
+      if (data.type === 'translation_result') {
+        // 接收到翻译结果
+        const { message_id, translated_content, status } = data;
+        if (message_id) {
+          messageTranslations[message_id] = {
+            translated_content: translated_content || '',
+            translation_status: status || 'completed'
+          };
+          
+          console.log(`WebSocket: Received translation for message ${message_id}`);
+        }
+      }
+    };
+    
+    translateWs.onerror = (error) => {
+      console.error('WebSocket: Connection error:', error);
+      updateWsStatus({ 
+        error: 'Failed to connect to translation service. Please try again later.' 
+      });
+    };
+    
+    translateWs.onclose = (event) => {
+      console.log(`WebSocket: Connection closed with code ${event.code}`);
+      
+      // 清除ping间隔
+      if (pingInterval) {
+        clearInterval(pingInterval as NodeJS.Timeout);
+        pingInterval = null;
+      }
+      
+      updateWsStatus({ 
+        connected: false, 
+        connecting: false,
+        error: event.code === 1000 ? null : 'Connection to translation service was closed unexpectedly'
+      });
+      
+      // 如果不是正常关闭，尝试在短暂延迟后重新连接
+      if (event.code !== 1000) {
+        setTimeout(() => {
+          console.log('WebSocket: Attempting to reconnect...');
+          initWebSocketConnection(sessionId, userLanguage);
+        }, 5000);
+      }
+      
+      translateWs = null;
+    };
+    
+    return true;
+  } catch (error) {
+    console.error('WebSocket: Error initializing connection:', error);
+    updateWsStatus({ 
+      connected: false, 
+      connecting: false,
+      error: 'Failed to initialize translation service connection'
+    });
+    return false;
+  }
+}
+
+// 安全关闭WebSocket连接
+export function closeWebSocketConnection() {
+  if (translateWs) {
+    try {
+      translateWs.close(1000, 'Normal closure');
+      console.log('WebSocket: Connection closed normally');
+    } catch (error) {
+      console.error('WebSocket: Error closing connection:', error);
+    }
+  }
   
-  setTimeout(() => {
-    updateWsStatus({ connected: true, connecting: false, error: null });
-    console.log('模拟WebSocket连接已建立');
-  }, 1000);
+  // 清除ping间隔
+  if (pingInterval) {
+    clearInterval(pingInterval as NodeJS.Timeout);
+    pingInterval = null;
+  }
   
-  return true;
+  translateWs = null;
+  updateWsStatus({ connected: false, connecting: false, error: null });
 }
 
 // 安全请求翻译
@@ -97,44 +283,145 @@ export async function translateMessage(
   sourceLanguage: string = 'auto',
   targetLanguage?: string
 ): Promise<boolean> {
-  console.log('模拟翻译请求:', { messageId, content, sourceLanguage, targetLanguage });
+  console.debug(`Translation request for message ${messageId}: ${content.substring(0, 30)}...`);
   
-  // 存储一个模拟的翻译结果
-  setTimeout(() => {
-    const translatedContent = `[翻译] ${content}`;
-    messageTranslations[`${messageId}`] = {
-      translated_content: translatedContent,
-      translation_status: 'completed'
+  // 检查内容是否为空
+  if (!content || content.trim() === '') {
+    console.warn(`Translation skipped for message ${messageId}: Empty content`);
+    return false;
+  }
+  
+  // 检查目标语言是否支持
+  if (targetLanguage && !supportedLanguages.includes(targetLanguage)) {
+    console.warn(`Translation skipped for message ${messageId}: Unsupported target language ${targetLanguage}`);
+    return false;
+  }
+  
+  // 如果是基本短语，使用映射表快速翻译
+  if (targetLanguage && isBasicPhrase(content)) {
+    const quickTranslation = getBasicPhraseTranslation(content, targetLanguage);
+    if (quickTranslation) {
+      console.log(`Quick translation for message ${messageId} using phrase map`);
+      messageTranslations[messageId] = {
+        translated_content: quickTranslation,
+        translation_status: 'completed'
+      };
+      return true;
+    }
+  }
+  
+  // 首先检查WebSocket连接
+  if (!translateWs || translateWs.readyState !== WebSocket.OPEN) {
+    console.warn(`Translation failed for message ${messageId}: WebSocket not connected`);
+    return false;
+  }
+  
+  try {
+    // 发送翻译请求
+    const request = {
+      type: 'translate',
+      message_id: messageId,
+      content,
+      source_language: sourceLanguage,
+      target_language: targetLanguage || 'auto'
     };
     
-    console.log('模拟翻译完成:', translatedContent);
-  }, 1000);
+    translateWs.send(JSON.stringify(request));
+    console.log(`Translation request sent for message ${messageId}`);
+    return true;
+  } catch (error) {
+    console.error(`Translation failed for message ${messageId}:`, error);
+    return false;
+  }
+}
+
+// 获取翻译结果
+export function getTranslation(messageId: number | string): { 
+  translated_content: string | null; 
+  translation_status: string;
+} {
+  const result = messageTranslations[messageId];
   
-  return true;
+  if (!result) {
+    return {
+      translated_content: null,
+      translation_status: 'pending'
+    };
+  }
+  
+  return result;
 }
 
 // 获取主机信息
 export async function getHostInfo(userId: string): Promise<HostInfo | null> {
-  console.log('获取主机信息:', userId);
+  if (!supabase) {
+    console.log('Using mock host info for:', userId);
+    
+    return {
+      id: userId,
+      name: "商家",
+      business_type: "服务",
+      business_intro: "欢迎光临",
+      avatar_url: "https://ui-avatars.com/api/?name=商家&background=random&size=128",
+    };
+  }
   
-  return {
-    id: userId,
-    name: "商家",
-    business_type: "服务",
-    business_intro: "欢迎光临",
-    avatar_url: "https://ui-avatars.com/api/?name=商家&background=random&size=128",
-  };
+  try {
+    console.log('Fetching host info for:', userId);
+    
+    const { data, error } = await supabase
+      .from('merchants')
+      .select('*')
+      .eq('id', userId)
+      .single();
+    
+    if (error) {
+      throw error;
+    }
+    
+    if (!data) {
+      throw new Error('Host not found');
+    }
+    
+    return {
+      id: data.id,
+      name: data.name || "商家",
+      business_type: data.business_type || "服务",
+      business_intro: data.business_intro || "欢迎光临",
+      avatar_url: data.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(data.name || "商家")}&background=random&size=128`,
+    };
+  } catch (error) {
+    console.error('Error fetching host info:', error);
+    
+    // 使用directDb作为备用
+    try {
+      const { getHostInfoDirectSql } = await import('./directDb');
+      return await getHostInfoDirectSql(userId);
+    } catch (fallbackError) {
+      console.error('Fallback method also failed:', fallbackError);
+      
+      // 返回基本信息
+      return {
+        id: userId,
+        name: "商家",
+        business_type: "服务",
+        business_intro: "欢迎光临",
+        avatar_url: "https://ui-avatars.com/api/?name=商家&background=random&size=128",
+      };
+    }
+  }
 }
 
 // 获取聊天消息
 export async function getChatMessages(sessionId: string): Promise<ChatMessage[]> {
-  console.log('获取聊天消息:', sessionId);
-  
   if (!supabase) {
+    console.log('Using mock messages for session:', sessionId);
     return [];
   }
   
   try {
+    console.log('Fetching messages for session:', sessionId);
+    
     const { data, error } = await supabase
       .from('messages')
       .select('*')
@@ -148,19 +435,30 @@ export async function getChatMessages(sessionId: string): Promise<ChatMessage[]>
     return (data || []).map((msg: any) => {
       const senderType = msg.is_host ? ('host' as const) : ('guest' as const);
       
+      // 检查是否有存储在内存中的翻译
+      const storedTranslation = messageTranslations[msg.id];
+      
       return {
         id: msg.id,
         content: msg.content,
         sender: senderType,
         timestamp: new Date(msg.timestamp),
         original_language: msg.original_language || 'auto',
-        translated_content: msg.translated_content,
-        translation_status: msg.translation_status || 'pending'
+        translated_content: storedTranslation?.translated_content || msg.translated_content,
+        translation_status: storedTranslation?.translation_status || msg.translation_status || 'pending'
       };
     });
   } catch (error) {
-    console.error('获取消息出错:', error);
-    return [];
+    console.error('Error fetching messages:', error);
+    
+    // 使用directDb作为备用
+    try {
+      const { getMessagesDirectSql } = await import('./directDb');
+      return await getMessagesDirectSql(sessionId);
+    } catch (fallbackError) {
+      console.error('Fallback method also failed:', fallbackError);
+      return [];
+    }
   }
 }
 
@@ -171,10 +469,10 @@ export async function sendMessage(
   isHost: boolean,
   language?: string
 ): Promise<ChatMessage | null> {
-  console.log('发送消息:', { sessionId, content, isHost });
-  
   if (!supabase) {
-    // 返回模拟消息
+    console.log('Using mock message sending for session:', sessionId);
+    
+    // 模拟消息ID
     const messageId = Date.now();
     const senderType = isHost ? ('host' as const) : ('guest' as const);
     
@@ -190,6 +488,8 @@ export async function sendMessage(
   }
   
   try {
+    console.log('Sending message to session:', sessionId);
+    
     // 使用Supabase客户端API发送消息
     const { data, error } = await supabase
       .from('messages')
@@ -207,7 +507,7 @@ export async function sendMessage(
     }
     
     if (!data) {
-      throw new Error('发送消息失败');
+      throw new Error('Failed to send message');
     }
     
     const senderType = isHost ? ('host' as const) : ('guest' as const);
@@ -222,14 +522,14 @@ export async function sendMessage(
       translation_status: 'pending'
     };
   } catch (error) {
-    console.error('发送消息出错:', error);
+    console.error('Error sending message:', error);
     
     // 使用directDb作为备用
     try {
       const { sendMessageDirectSql } = await import('./directDb');
       return await sendMessageDirectSql(sessionId, content, isHost, language);
     } catch (fallbackError) {
-      console.error('备用方法也失败:', fallbackError);
+      console.error('Fallback method also failed:', fallbackError);
       return null;
     }
   }
@@ -237,13 +537,14 @@ export async function sendMessage(
 
 // 获取或创建聊天会话
 export async function getOrCreateChatSession(merchantId: string): Promise<string> {
-  console.log('获取或创建聊天会话:', merchantId);
-  
   if (!supabase) {
+    console.log('Using mock session for merchant:', merchantId);
     return uuidv4();
   }
   
   try {
+    console.log('Getting or creating session for merchant:', merchantId);
+    
     // 尝试查找现有会话
     const { data, error } = await supabase
       .from('chat_sessions')
@@ -273,14 +574,14 @@ export async function getOrCreateChatSession(merchantId: string): Promise<string
     
     return sessionId;
   } catch (error) {
-    console.error('获取或创建会话出错:', error);
+    console.error('Error getting or creating session:', error);
     
     // 使用directDb作为备用
     try {
       const { createSessionDirectSql } = await import('./directDb');
       return await createSessionDirectSql(merchantId);
     } catch (fallbackError) {
-      console.error('备用方法也失败:', fallbackError);
+      console.error('Fallback method also failed:', fallbackError);
       return uuidv4();
     }
   }
@@ -291,12 +592,114 @@ export function subscribeToMessages(
   sessionId: string,
   callback: (message: ChatMessage) => void
 ) {
-  console.log('订阅消息更新 (模拟):', sessionId);
+  if (!supabase) {
+    console.log('Mock subscription for session:', sessionId);
+    return () => {}; // 返回空的取消订阅函数
+  }
   
-  // 无实际订阅功能，仅返回取消订阅函数
-  return () => {
-    console.log('取消订阅消息更新');
-  };
+  try {
+    console.log('Setting up real-time subscription for session:', sessionId);
+    
+    // 使用Supabase实时订阅
+    const subscription = supabase
+      .channel(`messages:${sessionId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `chat_session_id=eq.${sessionId}`
+        },
+        (payload) => {
+          if (!payload.new) return;
+          
+          const msg = payload.new;
+          const senderType = msg.is_host ? ('host' as const) : ('guest' as const);
+          
+          // 创建消息对象
+          const message: ChatMessage = {
+            id: msg.id,
+            content: msg.content,
+            sender: senderType,
+            timestamp: new Date(msg.timestamp),
+            original_language: msg.original_language || 'auto',
+            translated_content: msg.translated_content,
+            translation_status: msg.translation_status || 'pending'
+          };
+          
+          // 调用回调
+          callback(message);
+        }
+      )
+      .subscribe();
+    
+    // 返回取消订阅函数
+    return () => {
+      console.log('Unsubscribing from messages');
+      supabase?.channel(`messages:${sessionId}`).unsubscribe();
+    };
+  } catch (error) {
+    console.error('Error setting up subscription:', error);
+    return () => {}; // 返回空的取消订阅函数
+  }
+}
+
+// 订阅消息翻译更新
+export function subscribeToTranslations(
+  sessionId: string,
+  callback: (messageId: number, translation: string, status: string) => void
+) {
+  if (!supabase) {
+    console.log('Mock translation subscription for session:', sessionId);
+    return () => {}; // 返回空的取消订阅函数
+  }
+  
+  try {
+    console.log('Setting up real-time subscription for translations:', sessionId);
+    
+    // 使用Supabase实时订阅
+    const subscription = supabase
+      .channel(`translations:${sessionId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+          filter: `chat_session_id=eq.${sessionId}`
+        },
+        (payload) => {
+          if (!payload.new?.id || !payload.new?.translated_content) return;
+          
+          // 只有翻译内容变化时才调用回调
+          if (payload.old?.translated_content !== payload.new.translated_content) {
+            // 调用回调
+            callback(
+              payload.new.id,
+              payload.new.translated_content,
+              payload.new.translation_status || 'completed'
+            );
+            
+            // 更新内存缓存
+            messageTranslations[payload.new.id] = {
+              translated_content: payload.new.translated_content,
+              translation_status: payload.new.translation_status || 'completed'
+            };
+          }
+        }
+      )
+      .subscribe();
+    
+    // 返回取消订阅函数
+    return () => {
+      console.log('Unsubscribing from translations');
+      supabase?.channel(`translations:${sessionId}`).unsubscribe();
+    };
+  } catch (error) {
+    console.error('Error setting up translation subscription:', error);
+    return () => {}; // 返回空的取消订阅函数
+  }
 }
 
 // 初始化Supabase客户端
