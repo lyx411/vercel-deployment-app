@@ -1,19 +1,11 @@
 {
   "version": 2,
   "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/node",
-      "config": {
-        "includeFiles": ["dist/**", "client/**", "server/**", "shared/**"]
-      }
-    }
+    { "src": "client/package.json", "use": "@vercel/static-build", "config": { "distDir": "dist" } }
   ],
   "routes": [
     { "src": "/api/(.*)", "dest": "/api/vercel-bridge.js" },
-    { "src": "/(.*)", "dest": "/dist/public/index.html" }
-  ],
-  "env": {
-    "NODE_ENV": "production"
-  }
+    { "src": "/(.*)", "dest": "/client/dist/$1" },
+    { "src": "/", "dest": "/client/dist/index.html" }
+  ]
 }
