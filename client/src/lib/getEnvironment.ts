@@ -24,26 +24,11 @@ export function detectEnvironment(): 'cloudflare' | 'vercel' | 'localhost' | 're
  * @returns 根据环境返回不同的WebSocket URL
  */
 export function getWebSocketURL(): string {
-  const environment = detectEnvironment();
   const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
   const host = window.location.host;
   
-  switch (environment) {
-    case 'cloudflare':
-    case 'vercel':
-    case 'production':
-      // 在生产环境中使用本地代理
-      return `${protocol}://${host}/ws/edge-proxy`;
-    case 'localhost':
-      // 本地开发使用本地WebSocket代理
-      return `${protocol}://${host}/ws/translate`;
-    case 'replit':
-      // Replit环境使用代理
-      return `${protocol}://${host}/ws/translate`;
-    default:
-      // 默认使用本地代理
-      return `${protocol}://${host}/ws/edge-proxy`;
-  }
+  // 默认使用本地代理
+  return `${protocol}://${host}/ws/translate`;
 }
 
 /**
