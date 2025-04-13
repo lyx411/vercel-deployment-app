@@ -1,0 +1,180 @@
+/* QR码页面专用样式 */
+
+/* 页面背景与整体布局 */
+.qr-page-container {
+  min-height: 100vh;
+  background-color: #f7f9fc;
+  background-image: linear-gradient(135deg, #f5f7ff 0%, #f0f5ff 100%);
+  display: flex;
+  flex-direction: column;
+}
+
+/* 顶部导航栏样式 */
+.qr-appbar {
+  background-color: #4a6bff !important;
+  box-shadow: 0 2px 10px rgba(74, 107, 255, 0.15) !important;
+}
+
+.qr-title {
+  font-weight: 600 !important;
+  letter-spacing: 0.5px;
+}
+
+/* 主卡片容器 */
+.qr-card {
+  padding: 2rem;
+  border-radius: 16px !important;
+  background-color: white;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08) !important;
+  transition: transform 0.3s ease, box-shadow 0.3s ease !important;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.qr-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 12px 40px rgba(74, 107, 255, 0.12) !important;
+}
+
+/* QR码展示区域 */
+.qr-display-area {
+  margin: 1.5rem 0;
+  padding: 1.5rem;
+  border: 1px dashed rgba(74, 107, 255, 0.3);
+  border-radius: 12px;
+  background-color: #fff;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+
+.qr-image {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  transition: transform 0.3s ease;
+}
+
+.qr-image:hover {
+  transform: scale(1.02);
+}
+
+.qr-scan-badge {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  background-color: #4a6bff;
+  color: white;
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  box-shadow: 0 4px 12px rgba(74, 107, 255, 0.3);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(74, 107, 255, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(74, 107, 255, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(74, 107, 255, 0);
+  }
+}
+
+/* 按钮样式 */
+.qr-share-button {
+  background-color: #4a6bff !important;
+  border-radius: 8px !important;
+  padding: 10px 16px !important;
+  box-shadow: 0 4px 12px rgba(74, 107, 255, 0.2) !important;
+  transition: all 0.2s ease-in-out !important;
+  font-weight: 500 !important;
+}
+
+.qr-share-button:hover {
+  background-color: #3a5ae0 !important;
+  box-shadow: 0 6px 16px rgba(74, 107, 255, 0.3) !important;
+  transform: translateY(-2px) !important;
+}
+
+.qr-download-button {
+  border-color: #4a6bff !important;
+  color: #4a6bff !important;
+  border-radius: 8px !important;
+  padding: 10px 16px !important;
+  font-weight: 500 !important;
+  transition: all 0.2s ease-in-out !important;
+}
+
+.qr-download-button:hover {
+  background-color: rgba(74, 107, 255, 0.04) !important;
+  border-color: #3a5ae0 !important;
+  transform: translateY(-2px) !important;
+}
+
+.qr-copy-button {
+  color: rgba(0, 0, 0, 0.6) !important;
+  margin-top: 12px !important;
+  border-radius: 8px !important;
+  transition: all 0.2s ease !important;
+}
+
+.qr-copy-button:hover {
+  background-color: rgba(74, 107, 255, 0.08) !important;
+  color: #4a6bff !important;
+}
+
+/* 加载状态样式 */
+.qr-loading-spinner {
+  color: #4a6bff !important;
+}
+
+/* 提示消息样式 */
+.qr-alert-success {
+  background-color: #e4f8e9 !important;
+  color: #1b5e20 !important;
+  font-weight: 500 !important;
+  border-radius: 8px !important;
+}
+
+.qr-alert-error {
+  background-color: #fdeded !important;
+  color: #c62828 !important;
+  font-weight: 500 !important;
+  border-radius: 8px !important;
+}
+
+/* 响应式调整 */
+@media (max-width: 600px) {
+  .qr-card {
+    padding: 1.5rem;
+    margin: 1rem;
+  }
+  
+  .qr-display-area {
+    padding: 1rem;
+  }
+  
+  .qr-buttons-container {
+    flex-direction: column;
+  }
+}
+
+/* 动画效果 */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.qr-fade-in {
+  animation: fadeIn 0.5s ease-out forwards;
+}
