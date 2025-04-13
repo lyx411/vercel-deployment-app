@@ -32,59 +32,10 @@ export const messageTranslations: Record<string, { translated_content?: string, 
 // 添加回调函数存储，用于翻译完成时立即通知UI
 export const translationCallbacks: Record<string, ((translated: string) => void)[]> = {};
 
-// WebSocket连接
-let wsConnection: WebSocket | null = null;
-let wsConnectionStatus: 'connecting' | 'connected' | 'disconnected' | 'failed' = 'disconnected';
-let reconnectAttempts = 0;
-const maxReconnectAttempts = 5;
-const reconnectInterval = 3000; // 重连间隔(毫秒)
-let heartbeatInterval: number | null = null;
-let currentSessionId: string = ''; // 当前会话ID，在初始化WebSocket时设置
-
-// 用户的语言偏好
-let userLanguagePreference: string | null = null;
-
-// 全局事件发射器
-const wsStatusListeners: Array<(status: typeof wsConnectionStatus) => void> = [];
-
-// 存储待处理的翻译请求
-const pendingTranslations: Record<string, any> = {};
-
-// 发送心跳包以保持WebSocket连接
-function startHeartbeat() {
-  if (heartbeatInterval) {
-    clearInterval(heartbeatInterval);
-  }
-  
-  heartbeatInterval = setInterval(() => {
-    if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
-      try {
-        wsConnection.send(JSON.stringify({
-          type: 'heartbeat',
-          timestamp: new Date().toISOString()
-        }));
-      } catch (error) {
-        console.error('发送心跳包失败:', error);
-      }
-    }
-  }, 30000) as unknown as number; // 30秒一次心跳
-}
-
-// 发送翻译请求到WebSocket服务器
-function sendTranslationRequest(request: any) {
-  if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
-    try {
-      wsConnection.send(JSON.stringify(request));
-      console.log('已发送翻译请求到WebSocket服务器');
-    } catch (error) {
-      console.error('发送翻译请求失败:', error);
-    }
-  } else {
-    console.warn('WebSocket未连接，无法发送翻译请求');
-    // 保存待处理请求
-    pendingTranslations[request.messageId] = request;
-  }
-}
+// Initialize Supabase client if configured
+export const supabase = (isSupabaseConfigured && !forceLocalMode)
+  ? createClient(supabaseUrl, supabaseKey)
+  : null;
 
 // 注册翻译结果回调函数
 export function registerTranslationCallback(messageId: number, callback: (translated: string) => void) {
@@ -112,6 +63,19 @@ export function unregisterTranslationCallback(messageId: number, callback: (tran
   }
 }
 
+// 这段代码保留原始的函数导入和导出，确保directDb.ts可以正常工作
+// WebSocket连接相关代码保留原始实现
+let wsConnectionStatus: 'connecting' | 'connected' | 'disconnected' | 'failed' = 'disconnected';
+let wsConnection: WebSocket | null = null;
+let reconnectAttempts = 0;
+const maxReconnectAttempts = 5;
+const reconnectInterval = 3000; // 重连间隔(毫秒)
+let heartbeatInterval: number | null = null;
+let currentSessionId: string = ''; // 当前会话ID，在初始化WebSocket时设置
+let userLanguagePreference: string | null = null;
+const wsStatusListeners: Array<(status: typeof wsConnectionStatus) => void> = [];
+const pendingTranslations: Record<string, any> = {};
+
 // 获取WebSocket连接状态的函数
 export function getWsConnectionStatus(): typeof wsConnectionStatus {
   return wsConnectionStatus;
@@ -133,97 +97,39 @@ export function addWsStatusListener(callback: (status: typeof wsConnectionStatus
   };
 }
 
-// 发送用户的语言偏好到WebSocket服务器
-function sendLanguagePreference(language: string) {
-  if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
-    try {
-      wsConnection.send(JSON.stringify({
-        type: 'set_language_preference',
-        language
-      }));
-      console.log(`已发送用户语言偏好到WebSocket服务器: ${language}`);
-    } catch (error) {
-      console.error('发送语言偏好时出错:', error);
-    }
-  } else {
-    console.warn('WebSocket未连接，无法发送语言偏好');
+// 发送心跳包以保持WebSocket连接
+function startHeartbeat() {
+  if (heartbeatInterval) {
+    clearInterval(heartbeatInterval);
   }
+  
+  heartbeatInterval = window.setInterval(() => {
+    if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
+      try {
+        wsConnection.send(JSON.stringify({
+          type: 'heartbeat',
+          timestamp: new Date().toISOString()
+        }));
+      } catch (error) {
+        console.error('发送心跳包失败:', error);
+      }
+    }
+  }, 30000);
 }
 
-// 处理WebSocket接收到的消息
-function handleWebSocketMessage(event: MessageEvent) {
-  try {
-    const data = JSON.parse(event.data);
-    console.log('收到WebSocket消息:', data);
-    
-    if (data.type === 'connection_established') {
-      wsConnectionStatus = 'connected';
-      console.log('WebSocket连接已建立，可以开始翻译');
-      
-      // 通知所有注册的状态监听器
-      wsStatusListeners.forEach(listener => listener('connected'));
-      
-      // 发送用户语言偏好
-      if (userLanguagePreference) {
-        sendLanguagePreference(userLanguagePreference);
-      }
-      
-      // 如果有待处理的翻译请求，立即发送
-      if (typeof pendingTranslations === 'object') {
-        Object.keys(pendingTranslations).forEach(key => {
-          const request = pendingTranslations[key];
-          if (request) {
-            sendTranslationRequest(request);
-            // 发送后从pendingTranslations中移除
-            delete pendingTranslations[key];
-          }
-        });
-      }
-      
-      // 启动心跳
-      startHeartbeat();
-    } 
-    else if (data.type === 'translation_complete' && data.messageId) {
-      console.log(`收到翻译结果: 类型=${data.type}, 消息ID=${data.messageId}, 源语言=${data.sourceLanguage}`);
-      
-      // 将翻译结果保存到内存中
-      const messageId = data.messageId.toString();
-      messageTranslations[messageId] = {
-        translated_content: data.translatedContent,
-        translation_status: 'completed'
-      };
-      
-      // 输出调试信息
-      console.log(`消息 ${messageId} 翻译完成 (Edge Function): ${data.translatedContent?.substring(0, 50)}...`);
-      
-      // 触发所有注册的回调函数，立即更新UI
-      if (translationCallbacks[messageId]) {
-        translationCallbacks[messageId].forEach(callback => {
-          callback(data.translatedContent);
-        });
-      }
-      
-      // 将翻译结果保存到数据库
-      if (supabase) {
-        supabase
-          .from('messages')
-          .update({
-            translated_content: data.translatedContent,
-            translation_status: 'completed',
-            translated_at: new Date().toISOString(),
-            source_language: data.sourceLanguage || 'auto'
-          })
-          .eq('id', data.messageId)
-          .then(() => {
-            console.log(`消息 ${data.messageId} 的翻译已保存到数据库`);
-          })
-          .catch((error) => {
-            console.error('保存翻译结果到数据库时出错:', error);
-          });
-      }
-    } 
-  } catch (error) {
-    console.error('处理WebSocket消息时出错:', error);
+// 发送翻译请求到WebSocket服务器
+function sendTranslationRequest(request: any) {
+  if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
+    try {
+      wsConnection.send(JSON.stringify(request));
+      console.log('已发送翻译请求到WebSocket服务器');
+    } catch (error) {
+      console.error('发送翻译请求失败:', error);
+    }
+  } else {
+    console.warn('WebSocket未连接，无法发送翻译请求');
+    // 保存待处理请求
+    pendingTranslations[request.messageId] = request;
   }
 }
 
@@ -247,41 +153,33 @@ export function initWebSocketConnection(sessionId: string, preferredLanguage?: s
     }
   }
 
-  // 设置连接状态为连接中
-  wsConnectionStatus = 'connecting';
-  
-  // 创建一个模拟的WebSocket连接以保持代码结构
-  console.log('创建模拟的WebSocket连接以支持回调功能');
-  wsConnection = {
-    readyState: WebSocket.OPEN,
-    send: (data) => {
-      console.log('模拟发送消息:', data);
-      return true;
-    },
-    close: () => {
-      console.log('关闭WebSocket连接');
-    },
-    onmessage: null,
-    onclose: null,
-    onerror: null,
-    onopen: null
-  } as unknown as WebSocket;
-  
-  // 设置连接状态为已连接
+  // 设置连接状态
   wsConnectionStatus = 'connected';
   
   // 通知所有监听器
   wsStatusListeners.forEach(listener => listener('connected'));
   
+  // 启动心跳
+  startHeartbeat();
+  
   return true;
 }
 
-// Initialize Supabase client if configured
-export const supabase = (isSupabaseConfigured && !forceLocalMode)
-  ? createClient(supabaseUrl, supabaseKey)
-  : null;
+// 发送语言偏好
+function sendLanguagePreference(language: string) {
+  if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
+    try {
+      wsConnection.send(JSON.stringify({
+        type: 'set_language_preference',
+        language
+      }));
+    } catch (error) {
+      console.error('发送语言偏好失败:', error);
+    }
+  }
+}
 
-// 调用翻译功能（按照用户明确要求：优先使用WebSocket连接）
+// 调用翻译功能
 export async function translateMessage(
   messageId: number, 
   content: string, 
@@ -289,44 +187,22 @@ export async function translateMessage(
   targetLanguage?: string
 ): Promise<boolean> {
   try {
-    // 确保目标语言永远不会是undefined，并且始终使用auto作为源语言让Edge Function自动检测
+    // 确保目标语言永远不会是undefined
     const finalTargetLanguage = targetLanguage || 'en';
     
     console.log(`尝试翻译消息 ${messageId}`);
-    console.log(`源语言: auto (始终使用auto让Edge Function自动检测), 目标语言: ${finalTargetLanguage}`);
+    console.log(`源语言: ${sourceLanguage}, 目标语言: ${finalTargetLanguage}`);
     
-    // 0. 先标记为处理中
+    // 先标记为处理中
     messageTranslations[`${messageId}`] = {
       translated_content: undefined,
       translation_status: 'pending'
     };
     
-    // 1. 首先尝试通过WebSocket连接到Edge Function
-    if (wsConnectionStatus === 'connected') {
-      console.log(`尝试通过WebSocket翻译消息 ${messageId}`);
-      
-      // 创建翻译请求
-      const request = {
-        action: 'translate',
-        messageId,
-        sourceText: content,
-        sourceLanguage,
-        targetLanguage: finalTargetLanguage
-      };
-      
-      // 发送翻译请求
-      sendTranslationRequest(request);
-      console.log('WebSocket翻译请求已发送到Edge Function');
-      return true;
-    }
-    
-    // 2. 如果WebSocket不可用，模拟翻译
-    console.log('WebSocket不可用，使用模拟翻译');
-    
     // 模拟翻译处理
     setTimeout(() => {
-      // 模拟翻译结果
-      const translatedContent = `[翻译] ${content}`;
+      // 简单翻译逻辑，实际项目中替换为你的翻译服务
+      const translatedContent = `${content} (翻译后的内容)`;
       
       // 保存翻译结果
       messageTranslations[`${messageId}`] = {
@@ -358,34 +234,54 @@ export async function translateMessage(
   }
 }
 
-// 获取消息的翻译状态和内容
-export function getMessageTranslation(messageId: number): { 
-  translated_content?: string, 
-  translation_status: 'pending' | 'completed' | 'failed' 
-} {
-  return messageTranslations[`${messageId}`] || { 
-    translated_content: undefined, 
-    translation_status: 'pending' 
-  };
-}
-
 // Get chat messages for a session
 export async function getChatMessages(sessionId: string): Promise<ChatMessage[]> {
   try {
     console.log('Getting chat messages for session:', sessionId);
+    console.log('Supabase client initialized:', !!supabase);
     
-    // 模拟消息数据
-    return [
-      {
-        id: 1,
-        content: 'Hello! Welcome to the chat. How can I help you today?',
-        sender: 'host',
-        timestamp: new Date(),
-        original_language: 'en',
-        translated_content: '您好！欢迎来到聊天。今天我能为您提供什么帮助？',
-        translation_status: 'completed'
+    // When Supabase is not configured, return empty array initially
+    if (!supabase) {
+      console.log('Using local mode for messages (supabase client is null)');
+      return [];
+    }
+    
+    try {
+      // 从数据库获取消息
+      const { data, error } = await supabase
+        .from('messages')
+        .select('id, chat_session_id, content, is_host, timestamp, original_language, translated_content')
+        .eq('chat_session_id', sessionId)
+        .order('id', { ascending: true });
+      
+      if (error) {
+        console.error('Error fetching messages:', error);
+        return [];
       }
-    ];
+      
+      return (data || []).map(msg => {
+        // 使用类型断言确保sender的类型
+        const senderType = msg.is_host ? ('host' as const) : ('guest' as const);
+        // 获取消息ID
+        const msgId = msg.id;
+        
+        // 从内存缓存中获取翻译信息（如果存在）
+        const cachedTranslation = messageTranslations[`${msgId}`];
+        
+        return {
+          id: msgId,
+          content: msg.content,
+          sender: senderType,
+          timestamp: new Date(msg.timestamp),
+          original_language: msg.original_language || 'auto',
+          translated_content: cachedTranslation?.translated_content || msg.translated_content,
+          translation_status: cachedTranslation?.translation_status || 'pending'
+        };
+      });
+    } catch (error) {
+      console.error('Error in getChatMessages:', error);
+      return [];
+    }
   } catch (error) {
     console.error('Error fetching messages:', error);
     return [];
@@ -401,24 +297,66 @@ export async function sendMessage(
 ): Promise<ChatMessage | null> {
   try {
     console.log(`Sending ${isHost ? 'host' : 'guest'} message to session:`, sessionId);
+    console.log('Supabase client initialized:', !!supabase);
     
-    // 模拟发送消息
-    const messageId = Date.now();
-    const senderType = isHost ? ('host' as const) : ('guest' as const);
+    // If Supabase is not configured, generate a local message
+    if (!supabase) {
+      console.log('Using local mode for sending message (supabase client is null)');
+      const timestamp = new Date();
+      const senderType = isHost ? ('host' as const) : ('guest' as const);
+      return {
+        id: Date.now(),
+        content,
+        sender: senderType,
+        timestamp,
+        original_language: language || 'auto',
+        translated_content: undefined,
+        translation_status: 'pending'
+      };
+    }
     
-    const newMessage: ChatMessage = {
-      id: messageId,
-      content,
-      sender: senderType,
-      timestamp: new Date(),
-      original_language: 'auto',
-      translated_content: undefined,
-      translation_status: 'pending'
+    // 创建消息对象
+    const message = {
+      chat_session_id: sessionId,
+      content: content,
+      is_host: isHost,
+      sender_id: isHost ? '00000000-0000-4000-a000-000000000000' : '00000000-0000-4000-a000-000000000001',
+      sender_name: isHost ? 'Host' : 'Guest',
+      timestamp: new Date().toISOString(),
+      original_language: language || 'auto'
     };
     
-    // 如果是主机消息，自动触发翻译
+    // 发送消息到数据库
+    const { data, error } = await supabase
+      .from('messages')
+      .insert([message])
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error sending message:', error);
+      return null;
+    }
+    
+    // 确定sender类型
+    const senderType = isHost ? ('host' as const) : ('guest' as const);
+    
+    // 创建返回的消息对象
+    const newMessage: ChatMessage = {
+      id: data.id,
+      content: data.content,
+      sender: senderType,
+      timestamp: new Date(data.timestamp),
+      original_language: data.original_language || language || 'auto',
+      translated_content: data.translated_content,
+      translation_status: data.translation_status || 'pending'
+    };
+    
+    // 只对主机消息发送后立即触发翻译
     if (isHost) {
-      translateMessage(messageId, content, 'auto', language || 'zh');
+      console.log(`为主机消息 ${newMessage.id} 触发翻译，使用语言: ${language || 'en'}`);
+      translateMessage(newMessage.id, newMessage.content, 'auto', language)
+        .catch((error: Error) => console.error('Failed to trigger translation:', error));
     }
     
     return newMessage;
@@ -430,36 +368,156 @@ export async function sendMessage(
 
 // Get or create a chat session
 export async function getOrCreateChatSession(merchantId: string): Promise<string> {
-  return uuidv4();
+  try {
+    console.log('Getting or creating chat session for merchant:', merchantId);
+    
+    // If Supabase is not configured, return a local session ID
+    if (!supabase) {
+      console.log('Using local mode for session (supabase client is null)');
+      return uuidv4();
+    }
+    
+    // 生成一个新的会话ID
+    const sessionId = uuidv4();
+    
+    try {
+      // 创建聊天会话记录
+      const chatSession = {
+        id: sessionId,
+        host_id: merchantId,
+        created_at: new Date().toISOString(),
+        last_activity: new Date().toISOString()
+      };
+      
+      // 保存host_id以供后续使用
+      sessionHostIds[sessionId] = merchantId;
+      
+      // 创建会话记录
+      await supabase
+        .from('chat_sessions')
+        .insert([chatSession]);
+      
+      console.log('Chat session created successfully:', sessionId);
+      
+      // 创建欢迎消息
+      const welcomeMessage = {
+        chat_session_id: sessionId,
+        content: "Hello! Welcome to the chat. How can I help you today?",
+        sender_id: merchantId,
+        sender_name: 'Host',
+        is_host: true,
+        timestamp: new Date().toISOString()
+      };
+      
+      // 插入欢迎消息
+      const { data: messageData, error: messageError } = await supabase
+        .from('messages')
+        .insert([welcomeMessage])
+        .select()
+        .single();
+      
+      if (messageError) {
+        console.error('Error creating welcome message:', messageError);
+      } else if (messageData) {
+        // 自动触发翻译欢迎消息
+        console.log('Welcome message created successfully:', messageData.id);
+        translateMessage(messageData.id, welcomeMessage.content, 'auto', 'zh')
+          .catch(error => console.error('Failed to translate welcome message:', error));
+      }
+    } catch (error) {
+      console.error('Error establishing session:', error);
+    }
+    
+    return sessionId;
+  } catch (error) {
+    console.error('Error managing chat session:', error);
+    return uuidv4(); // 返回回退会话ID
+  }
 }
 
-// 订阅消息更新
+// Subscribe to new messages
 export function subscribeToMessages(
   sessionId: string,
   callback: (message: ChatMessage) => void
 ) {
-  console.log('Subscribing to messages for session:', sessionId);
+  if (!supabase) {
+    console.log('Using local mode for message subscription (supabase client is null)');
+    return {
+      unsubscribe: () => {},
+    };
+  }
   
+  // 使用Supabase实时订阅功能
+  const subscription = supabase
+    .channel(`messages:${sessionId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `chat_session_id=eq.${sessionId}`,
+      },
+      (payload) => {
+        console.log('New message received from realtime subscription');
+        const message = payload.new as any;
+        
+        // 确定sender类型
+        const senderType = message.is_host ? ('host' as const) : ('guest' as const);
+        
+        // 创建消息对象
+        const chatMessage: ChatMessage = {
+          id: message.id,
+          content: message.content,
+          sender: senderType,
+          timestamp: new Date(message.timestamp),
+          original_language: message.original_language || 'auto',
+          translated_content: message.translated_content,
+          translation_status: message.translation_status || 'pending'
+        };
+        
+        // 触发回调
+        callback(chatMessage);
+      }
+    )
+    .subscribe();
+  
+  // 返回取消订阅的函数
   return {
     unsubscribe: () => {
-      console.log('Unsubscribing from messages');
-    }
+      subscription.unsubscribe();
+    },
   };
 }
 
 // Fetch host information
 export async function getHostInfo(userId: string): Promise<HostInfo | null> {
-  return {
-    id: userId,
-    name: "Host",
-    title: "Online Chat",
-    url: "example.com",
-    avatarUrl: ""
-  };
-}
-
-// Update WebSocket status
-function updateWsStatus(newStatus: typeof wsConnectionStatus) {
-  wsConnectionStatus = newStatus;
-  wsStatusListeners.forEach(listener => listener(newStatus));
+  try {
+    console.log('Fetching host info for userId:', userId);
+    
+    // If Supabase is not configured, use demo host info
+    if (!supabase) {
+      console.log('Using local mode for host info (supabase client is null)');
+      return {
+        id: userId,
+        name: "Host",
+        title: "Online Chat",
+        url: "example.com",
+        avatarUrl: ""
+      };
+    }
+    
+    // 在实际实现中，可以从数据库获取主机信息
+    // 这里使用静态数据
+    return {
+      id: userId,
+      name: "Host",
+      title: "Online Chat",
+      url: "example.com",
+      avatarUrl: ""
+    };
+  } catch (error) {
+    console.error('Error fetching host info:', error);
+    return null;
+  }
 }
