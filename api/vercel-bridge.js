@@ -1,11 +1,21 @@
-// 简化的API桥接文件
-// 这个文件在Vercel上作为Serverless函数运行
-
-// 处理所有API请求
-export default function handler(req, res) {
+// Vercel API桥接文件
+module.exports = (req, res) => {
+  // 处理CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  
+  // 处理OPTIONS请求
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+  
+  // 简单响应，告知API服务在线
   res.status(200).json({
     status: 'online',
-    message: 'API服务已启动，可以正常接收请求',
+    message: 'API服务已启动',
+    timestamp: new Date().toISOString(),
     path: req.url
   });
-}
+};
