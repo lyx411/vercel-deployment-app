@@ -1,20 +1,26 @@
 {
-  "version": 2,
-  "builds": [
+  "rewrites": [
+    { "source": "/api/(.*)", "dest": "/api/serverless/$1" },
+    { "source": "/(.*)", "dest": "/" }
+  ],
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "outputDirectory": "dist/public",
+  "build": {
+    "env": {
+      "NODE_ENV": "production"
+    }
+  },
+  "crons": [
     {
-      "src": "package.json",
-      "use": "@vercel/node",
-      "config": {
-        "buildCommand": "npm run build"
-      }
+      "path": "/api/cron",
+      "schedule": "0 5 * * *"
     }
   ],
-  "routes": [
-    { "src": "/api/(.*)", "dest": "/dist/index.js" },
-    { "src": "/assets/(.*)", "dest": "/dist/public/assets/$1" },
-    { "src": "/(.*)", "dest": "/dist/public/index.html" }
-  ],
-  "env": {
-    "NODE_ENV": "production"
+  "functions": {
+    "api/serverless/*.js": {
+      "memory": 1024,
+      "maxDuration": 10
+    }
   }
 }
