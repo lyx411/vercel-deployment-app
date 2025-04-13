@@ -97,6 +97,18 @@ const translationMap: Record<string, Record<string, string>> = {
     '我能帮您什么？': 'How can I help you?',
     '感谢您的留言。': 'Thank you for your message.',
     '还有什么我能帮助您的吗？': 'Is there anything else I can assist with?'
+  },
+  'ja': {
+    'Hello! Welcome to the chat. How can I help you today?': 'こんにちは！チャットへようこそ。今日はどのようにお手伝いできますか？',
+    'How can I help you?': 'どのようにお手伝いできますか？',
+    'Thank you for your message.': 'メッセージをありがとうございます。',
+    'Is there anything else I can assist with?': '他に何かお手伝いできることはありますか？'
+  },
+  'ko': {
+    'Hello! Welcome to the chat. How can I help you today?': '안녕하세요! 채팅에 오신 것을 환영합니다. 오늘 어떻게 도와드릴까요?',
+    'How can I help you?': '어떻게 도와드릴까요?',
+    'Thank you for your message.': '메시지 감사합니다.',
+    'Is there anything else I can assist with?': '더 도와드릴 일이 있을까요?'
   }
 };
 
@@ -104,40 +116,6 @@ const translationMap: Record<string, Record<string, string>> = {
 export const supabase = (isSupabaseConfigured && !forceLocalMode)
   ? createClient(supabaseUrl, supabaseKey)
   : null;
-
-// Fetch host information (merchant details)
-export async function getHostInfo(userId: string): Promise<HostInfo | null> {
-  try {
-    console.log('Fetching host info for userId:', userId);
-    
-    // If Supabase is not configured, use demo host info
-    if (!supabase) {
-      console.log('Using local mode for host info (supabase client is null)');
-      return {
-        id: userId,
-        name: "示例商家",
-        title: "客户服务",
-        url: "https://example.com",
-        avatarUrl: "https://api.dicebear.com/7.x/micah/svg?seed=merchant",
-      };
-    }
-    
-    // In a real implementation, we would fetch this from a table
-    // For demo, use static data based on ID
-    const hostInfo: HostInfo = {
-      id: userId,
-      name: "示例商家",
-      title: "客户服务",
-      url: "https://example.com",
-      avatarUrl: "https://api.dicebear.com/7.x/micah/svg?seed=" + userId,
-    };
-    
-    return hostInfo;
-  } catch (error) {
-    console.error('Error fetching host info:', error);
-    return null;
-  }
-}
 
 // 获取主机消息并请求翻译
 async function fetchHostMessagesForTranslation(sessionId: string) {
@@ -263,7 +241,9 @@ export async function sendMessage(
       
       // 为本地消息创建翻译记录
       if (isHost) {
-        translateMessage(messageId, content, 'auto', 'en')
+        // 获取用户语言偏好
+        const userLang = localStorage.getItem('preferredLanguage') || 'zh';
+        translateMessage(messageId, content, 'auto', userLang)
           .catch(error => console.error('Failed to translate local host message:', error));
       }
       
@@ -319,7 +299,11 @@ export async function sendMessage(
     
     // 为主机消息触发翻译
     if (isHost && data && data.id) {
-      translateMessage(data.id, content, 'auto', 'en')
+      // 获取用户语言偏好
+      const userLang = localStorage.getItem('preferredLanguage') || 'zh';
+      console.log(`主机消息将翻译成用户选择的语言: ${userLang}`);
+      
+      translateMessage(data.id, content, 'auto', userLang)
         .catch(error => console.error('Failed to translate host message:', error));
     }
     
@@ -384,6 +368,9 @@ export async function getOrCreateChatSession(merchantId: string): Promise<string
       
       console.log('Chat session created successfully:', sessionData?.id);
       
+      // 获取用户语言偏好
+      const userLang = localStorage.getItem('preferredLanguage') || 'zh';
+      
       // Create welcome message
       const welcomeMessage = {
         chat_session_id: sessionId,
@@ -407,9 +394,10 @@ export async function getOrCreateChatSession(merchantId: string): Promise<string
       } else {
         console.log('Welcome message created successfully:', messageData?.id);
         
-        // 触发欢迎消息的翻译
+        // 触发欢迎消息的翻译，使用用户选择的语言
         if (messageData && messageData.id) {
-          translateMessage(messageData.id, welcomeMessage.content, 'auto', 'en')
+          console.log(`欢迎消息将翻译成用户选择的语言: ${userLang}`);
+          translateMessage(messageData.id, welcomeMessage.content, 'auto', userLang)
             .catch(error => console.error('Failed to translate welcome message:', error));
         }
       }
@@ -473,7 +461,11 @@ export function subscribeToMessages(
         
         // 如果是主机消息，自动触发翻译
         if (message.is_host) {
-          translateMessage(message.id, message.content, 'auto', 'en')
+          // 获取用户语言偏好
+          const userLang = localStorage.getItem('preferredLanguage') || 'zh';
+          console.log(`新收到的主机消息将翻译成用户选择的语言: ${userLang}`);
+          
+          translateMessage(message.id, message.content, 'auto', userLang)
             .catch(error => console.error('Failed to translate new host message:', error));
         }
       }
@@ -509,11 +501,72 @@ export function unregisterTranslationCallback(messageId: number, callback: (tran
   }
 }
 
+// 通过WebSocket请求翻译 - 与Edge Function格式保持一致
+function requestTranslationViaWebSocket(
+  messageId: number,
+  content: string,
+  sourceLanguage: string = 'auto', // 这个参数传递给Edge Function
+  targetLanguage: string = 'en'    // 这个参数传递给Edge Function
+): boolean {
+  if (!wsConnection || wsConnection.readyState !== WebSocket.OPEN) {
+    console.log('WebSocket未连接，无法发送翻译请求');
+    return false;
+  }
+  
+  try {
+    // 确保有目标语言
+    // 明确使用传入的targetLanguage参数，而不是默认值
+    console.log(`发送WebSocket翻译请求，目标语言: ${targetLanguage}`);
+    
+    // 创建唯一翻译ID
+    const translationId = `tr-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    
+    // 创建符合Edge Function期望的请求结构
+    const requestData = {
+      action: 'translate',          // Edge Function期望的动作类型
+      translationId,                // 唯一ID，用于跟踪请求
+      messageId,                    // 消息ID
+      sourceText: content,          // 原文内容
+      sourceLanguage: sourceLanguage, // 源语言（虽然Edge Function会自动检测，但还是传递）
+      targetLanguage: targetLanguage, // 目标语言，使用传入的参数
+      sessionId: currentSessionId   // 会话ID (如果Edge Function需要)
+    };
+    
+    console.log(`准备翻译消息(ID=${messageId})到${targetLanguage}语言:`, {
+      原始内容: content,
+      翻译ID: translationId,
+      源语言: sourceLanguage,
+      目标语言: targetLanguage,
+      会话ID: currentSessionId
+    });
+    
+    console.log(`通过WebSocket发送翻译请求:`, requestData);
+    // wsConnection已经在函数开头检查过是否存在和连接状态，这里可以安全地发送
+    if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
+      wsConnection.send(JSON.stringify(requestData));
+    } else {
+      throw new Error('WebSocket连接已断开，无法发送请求');
+    }
+    
+    // 标记为处理中
+    messageTranslations[`${messageId}`] = {
+      translated_content: undefined,
+      translation_status: 'pending'
+    };
+    
+    return true;
+  } catch (error) {
+    console.error('发送WebSocket翻译请求出错:', error);
+    return false;
+  }
+}
+
 // 初始化WebSocket连接
 export function initWebSocketConnection(sessionId: string, preferredLanguage?: string) {
   // 保存用户语言偏好
   if (preferredLanguage) {
     userLanguagePreference = preferredLanguage;
+    console.log(`更新WebSocket连接的用户语言偏好: ${preferredLanguage}`);
   }
   
   // 保存当前会话ID
@@ -748,19 +801,19 @@ export async function translateMessage(
     
     // 优先使用WebSocket连接进行翻译
     if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
-      console.log(`通过WebSocket请求翻译消息 ${messageId}`);
+      console.log(`通过WebSocket请求翻译消息 ${messageId} 到 ${finalTargetLanguage}`);
       
       // 发送翻译请求到Edge Function
-      wsConnection.send(JSON.stringify({
-        action: 'translate',
+      const success = requestTranslationViaWebSocket(
         messageId,
-        sourceText: content,
+        content,
         sourceLanguage,
-        targetLanguage: finalTargetLanguage,
-        sessionId: currentSessionId
-      }));
+        finalTargetLanguage
+      );
       
-      return true;
+      if (success) {
+        return true;
+      }
     } 
     // 如果WebSocket不可用，使用简单的本地映射翻译（仅用于演示）
     else {
@@ -770,10 +823,10 @@ export async function translateMessage(
       const translationKey = content.trim();
       let translatedContent = ''; 
       
-      if (finalTargetLanguage === 'en' && translationMap['zh'][translationKey]) {
-        translatedContent = translationMap['zh'][translationKey];
-      } else if (finalTargetLanguage === 'zh' && translationMap['en'][translationKey]) {
-        translatedContent = translationMap['en'][translationKey];
+      // 从翻译映射表中查找翻译
+      if (translationMap[finalTargetLanguage] && 
+          translationMap[finalTargetLanguage][translationKey]) {
+        translatedContent = translationMap[finalTargetLanguage][translationKey];
       } else {
         // 如果没有找到映射，简单地用原文，不添加额外文本
         translatedContent = content;
@@ -803,6 +856,13 @@ export async function translateMessage(
       
       return true;
     }
+    
+    // 如果到这里，说明所有方法都失败了
+    messageTranslations[`${messageId}`] = {
+      translated_content: undefined,
+      translation_status: 'failed'
+    };
+    return false;
   } catch (error) {
     console.error('调用翻译函数出错:', error);
     
