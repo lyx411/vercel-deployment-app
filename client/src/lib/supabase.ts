@@ -21,98 +21,10 @@ const forceLocalMode = false;
 // Track host IDs for sessions
 const sessionHostIds: Record<string, string> = {};
 
-// 内存中存储消息翻译
-// 键格式：`${messageId}`，值格式：{ translated_content, translation_status }
-export const messageTranslations: Record<string, { translated_content?: string, translation_status: 'pending' | 'completed' | 'failed' }> = {};
-
-// 添加回调函数存储，用于翻译完成时立即通知UI
-export const translationCallbacks: Record<string, ((translated: string) => void)[]> = {};
-
 // Initialize Supabase client if configured
 export const supabase = (isSupabaseConfigured && !forceLocalMode)
   ? createClient(supabaseUrl, supabaseKey)
   : null;
-
-// 注册翻译结果回调函数
-export function registerTranslationCallback(messageId: number, callback: (translated: string) => void) {
-  const key = messageId.toString();
-  if (!translationCallbacks[key]) {
-    translationCallbacks[key] = [];
-  }
-  translationCallbacks[key].push(callback);
-  
-  // 如果翻译已经完成，立即触发回调
-  const translation = messageTranslations[key];
-  if (translation?.translation_status === 'completed' && translation?.translated_content) {
-    callback(translation.translated_content);
-  }
-}
-
-// 移除翻译结果回调函数
-export function unregisterTranslationCallback(messageId: number, callback: (translated: string) => void) {
-  const key = messageId.toString();
-  if (translationCallbacks[key]) {
-    translationCallbacks[key] = translationCallbacks[key].filter(cb => cb !== callback);
-    if (translationCallbacks[key].length === 0) {
-      delete translationCallbacks[key];
-    }
-  }
-}
-
-// 调用翻译功能
-export async function translateMessage(
-  messageId: number, 
-  content: string, 
-  sourceLanguage: string = 'auto',
-  targetLanguage?: string
-): Promise<boolean> {
-  try {
-    // 确保目标语言永远不会是undefined
-    const finalTargetLanguage = targetLanguage || 'en';
-    
-    console.log(`尝试翻译消息 ${messageId}`);
-    console.log(`源语言: ${sourceLanguage}, 目标语言: ${finalTargetLanguage}`);
-    
-    // 先标记为处理中
-    messageTranslations[`${messageId}`] = {
-      translated_content: undefined,
-      translation_status: 'pending'
-    };
-    
-    // 模拟翻译处理
-    setTimeout(() => {
-      // 简单翻译逻辑，实际项目中替换为你的翻译服务
-      const translatedContent = `${content} (翻译后的内容)`;
-      
-      // 保存翻译结果
-      messageTranslations[`${messageId}`] = {
-        translated_content: translatedContent,
-        translation_status: 'completed'
-      };
-      
-      // 触发回调
-      if (translationCallbacks[`${messageId}`]) {
-        translationCallbacks[`${messageId}`].forEach(callback => {
-          callback(translatedContent);
-        });
-      }
-      
-      console.log(`模拟翻译完成: ${translatedContent}`);
-    }, 1000);
-    
-    return true;
-  } catch (error) {
-    console.error('调用翻译函数出错:', error);
-    
-    // 标记为失败
-    messageTranslations[`${messageId}`] = {
-      translated_content: undefined,
-      translation_status: 'failed'
-    };
-    
-    return false;
-  }
-}
 
 // Fetch host information (merchant details)
 export async function getHostInfo(userId: string): Promise<HostInfo | null> {
@@ -175,22 +87,12 @@ export async function getChatMessages(sessionId: string): Promise<ChatMessage[]>
     
     console.log(`Found ${data?.length || 0} messages in Supabase`);
     
-    return (data || []).map(msg => {
-      // 获取消息ID
-      const msgId = msg.id;
-      
-      // 从内存缓存中获取翻译信息（如果存在）
-      const cachedTranslation = messageTranslations[`${msgId}`];
-      
-      return {
-        id: msg.id,
-        content: msg.content,
-        sender: msg.sender,
-        timestamp: new Date(msg.timestamp),
-        translated_content: cachedTranslation?.translated_content,
-        translation_status: cachedTranslation?.translation_status || 'pending'
-      };
-    });
+    return (data || []).map(msg => ({
+      id: msg.id,
+      content: msg.content,
+      sender: msg.sender,
+      timestamp: new Date(msg.timestamp),
+    }));
   } catch (error) {
     console.error('Error fetching messages:', error);
     return [];
@@ -214,21 +116,11 @@ export async function sendMessage(
     if (!supabase) {
       console.log('Using local mode for sending message (supabase client is null)');
       const timestamp = new Date();
-      const messageId = Date.now();
-      
-      // 为本地消息创建翻译记录
-      if (isHost) {
-        translateMessage(messageId, content, 'auto', 'en')
-          .catch(error => console.error('Failed to translate local host message:', error));
-      }
-      
       return {
-        id: messageId,
+        id: Date.now(),
         content,
         sender,
         timestamp,
-        translated_content: messageTranslations[`${messageId}`]?.translated_content,
-        translation_status: messageTranslations[`${messageId}`]?.translation_status || 'pending'
       };
     }
     
@@ -270,19 +162,11 @@ export async function sendMessage(
     
     console.log('Message successfully sent to Supabase:', data?.id);
     
-    // 为主机消息触发翻译
-    if (isHost && data && data.id) {
-      translateMessage(data.id, content, 'auto', 'en')
-        .catch(error => console.error('Failed to translate host message:', error));
-    }
-    
     return {
       id: data.id,
       content: data.content,
       sender: data.sender,
       timestamp: new Date(data.timestamp),
-      translated_content: messageTranslations[`${data.id}`]?.translated_content,
-      translation_status: messageTranslations[`${data.id}`]?.translation_status || 'pending'
     };
   } catch (error) {
     console.error('Error sending message:', error);
@@ -354,12 +238,6 @@ export async function getOrCreateChatSession(merchantId: string): Promise<string
         // Continue execution even if welcome message fails
       } else {
         console.log('Welcome message created successfully:', messageData?.id);
-        
-        // 触发欢迎消息的翻译
-        if (messageData && messageData.id) {
-          translateMessage(messageData.id, welcomeMessage.content, 'auto', 'en')
-            .catch(error => console.error('Failed to translate welcome message:', error));
-        }
       }
     } catch (error) {
       console.error('Error establishing session:', error);
@@ -404,24 +282,12 @@ export function subscribeToMessages(
       (payload) => {
         console.log('New message received from realtime subscription:', payload);
         const message = payload.new as any;
-        
-        // 获取翻译状态（如果存在）
-        const cachedTranslation = messageTranslations[`${message.id}`];
-        
         callback({
           id: message.id,
           content: message.content,
           sender: message.sender,
           timestamp: new Date(message.timestamp),
-          translated_content: cachedTranslation?.translated_content,
-          translation_status: cachedTranslation?.translation_status || 'pending'
         });
-        
-        // 如果是主机消息，自动触发翻译
-        if (message.sender === 'host') {
-          translateMessage(message.id, message.content, 'auto', 'en')
-            .catch(error => console.error('Failed to translate new host message:', error));
-        }
       }
     )
     .subscribe((status) => {
