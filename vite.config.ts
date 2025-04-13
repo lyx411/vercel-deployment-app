@@ -50,7 +50,11 @@ export default defineConfig({
         format: 'es',
         globals: {
           'ws': 'WebSocket'
-        }
+        },
+        // 保证asset文件路径正确
+        assetFileNames: 'assets/[name].[hash].[ext]',
+        chunkFileNames: 'assets/[name].[hash].js',
+        entryFileNames: 'assets/[name].[hash].js'
       }
     },
     target: 'es2018',
