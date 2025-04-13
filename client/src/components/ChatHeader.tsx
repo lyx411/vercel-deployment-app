@@ -2,7 +2,7 @@ import React from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
-import TranslateIcon from './icons/TranslateIcon';
+import { Languages } from 'lucide-react';
 
 interface ChatHeaderProps {
   merchantName?: string;
@@ -52,7 +52,7 @@ export default function ChatHeader({
         title={isTranslationEnabled ? "关闭翻译" : "开启翻译"}
         aria-label={isTranslationEnabled ? "关闭翻译" : "开启翻译"}
       >
-        <TranslateIcon className={`h-5 w-5 ${isTranslationEnabled ? 'text-white' : ''}`} />
+        <Languages className={`h-5 w-5 ${isTranslationEnabled ? 'text-white' : ''}`} />
       </Button>
     </div>
   );
