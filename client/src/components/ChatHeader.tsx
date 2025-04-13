@@ -19,14 +19,8 @@ export default function ChatHeader({
   isTranslationEnabled,
   onToggleTranslation
 }: ChatHeaderProps) {
-  const { currentLanguage } = useLanguage();
-  
-  // 获取WebSocket基础URL
-  const getWsBaseUrl = () => {
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const host = window.location.host;
-    return `${protocol}://${host}`;
-  };
+  // 使用语言上下文
+  const { preferredLanguage } = useLanguage();
   
   return (
     <div className="flex items-center justify-between p-4 border-b">
@@ -39,7 +33,7 @@ export default function ChatHeader({
           <h2 className="text-lg font-semibold">{merchantName}</h2>
           <p className="text-sm text-muted-foreground">
             {isTranslationEnabled
-              ? `翻译已开启 (${currentLanguage} → ${targetLanguage || '自动'})`
+              ? `翻译已开启 (${preferredLanguage} → ${targetLanguage || '自动'})`
               : '点击开启翻译功能'}
           </p>
         </div>
