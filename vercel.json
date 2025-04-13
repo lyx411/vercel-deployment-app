@@ -1,14 +1,20 @@
 {
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/" }
-  ],
-  "functions": {
-    "api/vercel-bridge.js": {
-      "memory": 1024,
-      "maxDuration": 10
+  "version": 2,
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/node",
+      "config": {
+        "buildCommand": "npm run build"
+      }
     }
-  },
-  "buildCommand": "npm run vercel-build",
-  "outputDirectory": "dist/public",
-  "framework": "vite"
+  ],
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/dist/index.js" },
+    { "src": "/assets/(.*)", "dest": "/dist/public/assets/$1" },
+    { "src": "/(.*)", "dest": "/dist/public/index.html" }
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  }
 }
