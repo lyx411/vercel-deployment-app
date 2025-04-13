@@ -1,4 +1,4 @@
-import express, { Express, Request, Response, NextFunction } from 'express';
+import { Express, Request, Response, NextFunction } from 'express';
 
 export default function setupRoutes(app: Express) {
   // 健康检查端点
