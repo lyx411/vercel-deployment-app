@@ -1,3 +1,3 @@
-# vercel-deployment-app
+# QR码生成器
 
-清空库内容中...
+这是一个简单的QR码生成器项目。
