@@ -3,9 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>二维码聊天应用</title>
+  <title>QR码生成器</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div id="root"></div>
+  <div class="container">
+    <h1>QR码生成器</h1>
+    <div class="input-group">
+      <input type="text" id="text-input" placeholder="请输入文本或URL">
+      <button id="generate-btn">生成QR码</button>
+    </div>
+    <div id="qrcode-container"></div>
+    <div id="download-container" style="display:none;">
+      <button id="download-btn">下载QR码</button>
+    </div>
+  </div>
+  <footer>
+    <p>© 2023 QR码生成器 | <a href="https://github.com/lyx411/vercel-deployment-app" target="_blank">GitHub</a></p>
+  </footer>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+  <script src="script.js"></script>
 </body>
 </html>
