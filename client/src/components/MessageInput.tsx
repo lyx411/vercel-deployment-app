@@ -1,48 +1,49 @@
-import { useState, KeyboardEvent } from 'react';
-import { Send } from 'lucide-react';
+import React, { useState } from 'react';
 
 interface MessageInputProps {
-  onSendMessage: (message: string) => void;
+  onSendMessage: (content: string) => void;
+  placeholder?: string;
+  disabled?: boolean;
 }
 
-export function MessageInput({ onSendMessage }: MessageInputProps) {
+export const MessageInput: React.FC<MessageInputProps> = ({
+  onSendMessage,
+  placeholder = '输入消息...',
+  disabled = false
+}) => {
   const [message, setMessage] = useState('');
 
-  const handleSendMessage = () => {
-    const trimmedMessage = message.trim();
-    if (trimmedMessage) {
-      onSendMessage(trimmedMessage);
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (message.trim() && !disabled) {
+      onSendMessage(message);
       setMessage('');
     }
   };
 
-  const handleKeyPress = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      handleSendMessage();
-    }
-  };
-
   return (
-    <div className="p-3 bg-white w-full border-t">
-      <div className="flex items-center">
-        <div className="flex-grow bg-gray-100 rounded-full flex items-center px-4 mr-2">
+    <form onSubmit={handleSubmit} className="border-t border-gray-200 p-4 bg-white">
+      <div className="flex items-end space-x-2">
+        <div className="flex-grow relative">
           <input
             type="text"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            onKeyUp={handleKeyPress}
-            className="flex-grow outline-none text-gray-700 py-3 bg-transparent"
-            placeholder="输入信息..."
+            placeholder={placeholder}
+            disabled={disabled}
+            className="w-full border border-gray-300 rounded-lg px-4 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
         <button
-          onClick={handleSendMessage}
-          disabled={!message.trim()}
-          className="bg-[#5A97F4] text-white p-3 rounded-full hover:opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center w-12 h-12"
+          type="submit"
+          disabled={!message.trim() || disabled}
+          className={`px-4 py-2 rounded-lg font-medium focus:outline-none ${!message.trim() || disabled
+            ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+            : 'bg-blue-500 text-white hover:bg-blue-600'}`}
         >
-          <Send className="h-6 w-6" strokeWidth={2.5} />
+          发送
         </button>
       </div>
-    </div>
+    </form>
   );
-}
+};
