@@ -1,23 +1,31 @@
-import { Route, Switch } from 'wouter';
-import { Suspense, lazy } from 'react';
-import { QueryClientProvider } from '@tanstack/react-query';
-import { queryClient } from './lib/queryClient';
+import { Switch, Route } from "wouter";
+import { queryClient } from "./lib/queryClient";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { Toaster } from "@/components/ui/toaster";
+import NotFound from "@/pages/not-found";
+import ChatPage from "@/pages/ChatPage";
+import LanguageSelectionPage from "@/pages/LanguageSelectionPage";
+import { LanguageProvider } from "./contexts/LanguageContext";
 
-// Lazy load pages for better performance
-const ChatPage = lazy(() => import('./pages/ChatPage'));
-const StatusPage = lazy(() => import('./pages/StatusPage'));
-const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
+function Router() {
+  return (
+    <Switch>
+      <Route path="/" component={LanguageSelectionPage} />
+      <Route path="/chat" component={ChatPage} />
+      <Route component={NotFound} />
+    </Switch>
+  );
+}
 
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <Suspense fallback={<div className="loading">加载中...</div>}>
-        <Switch>
-          <Route path="/" component={ChatPage} />
-          <Route path="/status" component={StatusPage} />
-          <Route component={NotFoundPage} />
-        </Switch>
-      </Suspense>
+      <LanguageProvider>
+        <div>
+          <Router />
+        </div>
+        <Toaster />
+      </LanguageProvider>
     </QueryClientProvider>
   );
 }
