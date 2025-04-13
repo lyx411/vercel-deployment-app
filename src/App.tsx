@@ -1,39 +1,34 @@
-import { Routes, Route } from 'react-router-dom'
-import { ThemeProvider, createTheme } from '@mui/material/styles'
-import CssBaseline from '@mui/material/CssBaseline'
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { ThemeProvider, createTheme, CssBaseline } from '@mui/material'
 import HomePage from './pages/HomePage'
-import ChatPage from './pages/ChatPage'
 import LanguageSelectionPage from './pages/LanguageSelectionPage'
+import ChatPage from './pages/ChatPage'
 import NotFoundPage from './pages/NotFoundPage'
 
-// 创建主题
 const theme = createTheme({
   palette: {
     primary: {
-      main: '#4285F4',
+      main: '#4285F4', // Google Blue
     },
     secondary: {
-      main: '#A56FFF',
+      main: '#34A853', // Google Green
     },
     background: {
       default: '#f5f5f5',
-      paper: '#ffffff',
     },
   },
   typography: {
-    fontFamily: '"Noto Sans SC", "Roboto", "Helvetica", "Arial", sans-serif',
-    fontSize: 14,
-    fontWeightLight: 300,
-    fontWeightRegular: 400,
-    fontWeightMedium: 500,
-    fontWeightBold: 700,
+    fontFamily: '\'Roboto\', \'Helvetica\', \'Arial\', sans-serif',
+  },
+  shape: {
+    borderRadius: 8,
   },
   components: {
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 20,
           textTransform: 'none',
+          fontWeight: 500,
         },
       },
     },
@@ -44,12 +39,14 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/language" element={<LanguageSelectionPage />} />
-        <Route path="/chat" element={<ChatPage />} />
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
+      <Router>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/language" element={<LanguageSelectionPage />} />
+          <Route path="/chat" element={<ChatPage />} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </Router>
     </ThemeProvider>
   )
 }
