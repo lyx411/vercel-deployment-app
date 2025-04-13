@@ -1,175 +1,87 @@
-import { createServer } from "http";
-import { log } from "./vite";
-import { Express } from "express";
+import { Express, Request, Response, NextFunction } from 'express';
 
-let reqCount = 0;
-
-export async function registerRoutes(app: Express) {
-  // Create a server so we can attach the WebSocket server
-  const httpServer = createServer(app);
-
-  // WebSocket Setup
-  let wsClients: Set<WebSocket> = new Set();
-  const WebSocket = (await import("ws")).WebSocket;
-  const wsServerOptions = { noServer: true };
-  const wsServer = new WebSocket.Server(wsServerOptions);
-
-  httpServer.on("upgrade", (request, socket, head) => {
-    const url = new URL(request.url || "", `http://${request.headers.host}`);
-    const { pathname } = url;
-
-    // Handle Translate Requests
-    if (pathname === "/translate") {
-      wsServer.handleUpgrade(request, socket, head, (ws) => {
-        wsServer.emit("connection", ws, request);
-        wsClients.add(ws);
-
-        log(`WebSocket client connected to /translate, total: ${wsClients.size}`);
-
-        ws.addEventListener("message", (event) => {
-          try {
-            const data = JSON.parse(event.data.toString());
-            handleWsMessage(ws, data);
-          } catch (e) {
-            log(`Failed to parse WebSocket message: ${e}`);
-          }
-        });
-
-        ws.addEventListener("close", () => {
-          wsClients.delete(ws);
-          log(`WebSocket client disconnected, total: ${wsClients.size}`);
-        });
-      });
-    } else {
-      socket.destroy();
-    }
+export default function setupRoutes(app: Express) {
+  // 健康检查端点
+  app.get('/api/health', (req: Request, res: Response) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
-  // Ping API Endpoint
-  app.get("/api/ping", (_req, res) => {
-    res.json({ message: "pong" });
-  });
-
-  // Translation Endpoint (Fallback for WebSocket)
-  app.post("/api/translate", async (req, res) => {
-    const { text, source, target } = req.body;
-    let srcLang = source || "auto";
-    const targetLang = target || "en";
-
-    if (!text) {
-      return res.status(400).json({ error: "Missing text parameter" });
-    }
-
-    try {
-      log(`Translation request: ${text.substring(0, 30)}${text.length > 30 ? "..." : ""}`);
-      
-      // Add a delay to simulate translation process
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Simple "translation" - just add some prefix/suffix
-      let translatedText = `[${targetLang}] ${text} [translated from ${srcLang}]`;
-      
-      return res.json({
-        success: true,
-        translation: translatedText,
-        source: srcLang,
-        target: targetLang
-      });
-    } catch (error) {
-      console.error("Translation error:", error);
-      return res.status(500).json({
-        error: "Translation failed",
-        details: error.message
-      });
-    }
-  });
-
-  // Example API
-  app.get("/api/example", (_req, res) => {
-    reqCount++;
-    res.json({
-      message: "Hello from the API!",
-      count: reqCount,
-      time: new Date().toISOString(),
+  // 获取服务器时间
+  app.get('/api/time', (req: Request, res: Response) => {
+    res.json({ 
+      serverTime: new Date().toISOString(),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone 
     });
   });
 
-  // WebSocket Message Handler
-  function handleWsMessage(ws: WebSocket, data: any) {
-    const { action } = data;
+  // 获取环境信息
+  app.get('/api/environment', (req: Request, res: Response) => {
+    res.json({
+      nodeEnv: process.env.NODE_ENV || 'development',
+      platform: process.platform,
+      nodeVersion: process.version,
+    });
+  });
 
-    // User Language Preference
-    if (action === "setUserLanguage") {
-      const { language } = data;
-      log(`Set user language: ${language}`);
-      ws.send(JSON.stringify({
-        type: "connection",
-        status: "established",
-        message: "WebSocket connection established"
-      }));
-      return;
+  // 模拟API端点 - 获取用户信息
+  app.get('/api/user/:id', (req: Request, res: Response) => {
+    const userId = req.params.id;
+    
+    // 返回模拟用户数据
+    res.json({
+      id: userId,
+      name: `User ${userId}`,
+      email: `user${userId}@example.com`,
+      createdAt: new Date().toISOString()
+    });
+  });
+
+  // 回显POST数据
+  app.post('/api/echo', (req: Request, res: Response) => {
+    res.json({
+      receivedData: req.body,
+      timestamp: new Date().toISOString()
+    });
+  });
+  
+  // 示例：聊天API
+  app.post('/api/chat', (req: Request, res: Response) => {
+    const { message } = req.body;
+    
+    if (!message) {
+      return res.status(400).json({
+        error: '缺少消息内容'
+      });
     }
+    
+    // 返回模拟响应
+    res.json({
+      id: `msg_${Date.now()}`,
+      text: `回复: ${message}`,
+      timestamp: new Date().toISOString()
+    });
+  });
 
-    // Heartbeat
-    if (action === "heartbeat") {
-      ws.send(JSON.stringify({
-        type: "heartbeat",
-        timestamp: new Date().toISOString()
-      }));
-      return;
-    }
-
-    // Translation Request
-    if (action === "translate") {
-      const { messageId, text, targetLanguage, sourceLanguage } = data;
-      
-      if (!text || !messageId) {
-        ws.send(JSON.stringify({
-          type: "error",
-          messageId,
-          error: "Missing required fields"
-        }));
-        return;
-      }
-
-      log(`WebSocket translation request: ${messageId}`);
-      
-      // Send status update
-      ws.send(JSON.stringify({
-        type: "translation-status",
-        messageId,
-        status: "processing"
-      }));
-
-      // Simulate translation process with delay
-      setTimeout(() => {
-        const srcLang = sourceLanguage || "auto";
-        const tgtLang = targetLanguage || "en";
-        
-        // Simple translation simulation 
-        const translatedText = `[${tgtLang}] ${text} [translated from ${srcLang}]`;
-        
-        // Send translation result
-        ws.send(JSON.stringify({
-          type: "translation-result",
-          messageId,
-          translatedText,
-          sourceLanguage: srcLang,
-          targetLanguage: tgtLang
-        }));
-        
-        log(`WebSocket translation completed: ${messageId}`);
-      }, 1000);
-      return;
-    }
-
-    // Unknown action
-    log(`Unknown WebSocket action: ${action}`);
-    ws.send(JSON.stringify({
-      type: "error",
-      error: `Unknown action: ${action}`
-    }));
-  }
-
-  return httpServer;
+  // 子路由分组示例
+  const productRoutes = express.Router();
+  
+  productRoutes.get('/', (req: Request, res: Response) => {
+    res.json([
+      { id: 1, name: 'Product 1', price: 99.99 },
+      { id: 2, name: 'Product 2', price: 149.99 },
+      { id: 3, name: 'Product 3', price: 199.99 }
+    ]);
+  });
+  
+  productRoutes.get('/:id', (req: Request, res: Response) => {
+    const productId = parseInt(req.params.id);
+    res.json({
+      id: productId,
+      name: `Product ${productId}`,
+      price: 99.99 * productId,
+      description: `这是产品 ${productId} 的详细描述`
+    });
+  });
+  
+  app.use('/api/products', productRoutes);
 }
